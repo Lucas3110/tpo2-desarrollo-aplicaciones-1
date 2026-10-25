@@ -40,3 +40,30 @@ export async function confirmarRegistro({ email, codigo, nombre, password }) {
   });
   return data;
 }
+
+// POST /auth/login
+//
+// Ingreso con email y contrasena. Devuelve { token, usuario }.
+//
+// El backend contesta el mismo mensaje generico cuando el email no existe y
+// cuando la contrasena esta mal, asi nadie puede averiguar que emails tienen
+// cuenta probando de a uno. Por eso la pantalla muestra el mensaje tal cual
+// viene y no intenta adivinar que campo fue.
+//
+// Caso aparte: si la cuenta existe pero nunca confirmo el email, el backend
+// devuelve 403 con el codigo EMAIL_NO_VERIFICADO. Ahi si conviene ofrecerle
+// volver al registro en vez de dejarla trabada.
+export async function login({ email, password }) {
+  const { data } = await apiClient.post('/auth/login', { email, password });
+  return data;
+}
+
+// GET /auth/me
+//
+// Trae el usuario de la sesion guardada. Sirve para refrescar los datos al
+// arrancar: si el perfil cambio desde otro lado, lo que tenemos guardado
+// quedo viejo. Si el token vencio, esto contesta 401.
+export async function obtenerPerfil() {
+  const { data } = await apiClient.get('/auth/me');
+  return data;
+}
