@@ -42,3 +42,30 @@ export function urlDeFoto(url) {
   // BASE_URL termina en /api y las fotos cuelgan de la raíz del backend.
   return BASE_URL.replace(/\/api\/?$/, '') + url;
 }
+
+// GET /hallado/publicaciones/mias
+//
+// Devuelve { publicaciones, resumen }. El resumen cuenta SIEMPRE el total,
+// no lo filtrado: es lo que necesitan las solapas, porque si contara lo
+// filtrado, parado en "Vencidas" diria "Abiertas: 0".
+export async function misPublicaciones(estado) {
+  const { data } = await apiClient.get('/hallado/publicaciones/mias', {
+    params: estado ? { estado } : undefined,
+  });
+  return data;
+}
+
+// POST /hallado/publicaciones/:id/renovar
+//
+// "Las publicaciones vencen a los 30 dias y pueden renovarse." Renovar corre
+// el vencimiento 30 dias desde ahora, no desde el vencimiento viejo.
+export async function renovarPublicacion(id) {
+  const { data } = await apiClient.post(`/hallado/publicaciones/${id}/renovar`);
+  return data.publicacion;
+}
+
+// DELETE /hallado/publicaciones/:id
+export async function eliminarPublicacion(id) {
+  const { data } = await apiClient.delete(`/hallado/publicaciones/${id}`);
+  return data;
+}
