@@ -26,6 +26,10 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '../hooks/useAuth';
 import { guardarBiometriaActivada, leerBiometriaActivada } from '../services/preferencias';
 
+// Cuánto esperamos, después de que el prompt se cierra, antes de volver a
+// escuchar los cambios de AppState. Ver el comentario de promptAbierto.
+const MS_GRACIA_PROMPT = 1000;
+
 export const BiometriaContext = createContext(null);
 
 export function BiometriaProvider({ children }) {
@@ -41,6 +45,16 @@ export function BiometriaProvider({ children }) {
   // Para saber si ya pasamos el arranque. Un ref y no un estado: cambiarlo no
   // tiene que provocar un render.
   const yaArranco = useRef(false);
+
+  // Mientras mostramos NUESTRO prompt de biometría hay que ignorar AppState.
+  //
+  // Esto no es paranoia: Android manda la app a 'background' cuando aparece el
+  // BiometricPrompt. Sin esta bandera pasa lo siguiente, y lo vimos pasar:
+  // el prompt manda la app a background -> el listener bloquea la sesión ->
+  // aparece la pantalla de desbloqueo -> que pide la huella sola -> al
+  // cerrarse ese prompt vuelve a mandar background -> bloquea otra vez. La app
+  // queda pidiendo la huella para siempre, aunque la persona la pase bien.
+  const promptAbierto = useRef(false);
 
   useEffect(() => {
     const averiguar = async () => {
@@ -76,9 +90,9 @@ export function BiometriaProvider({ children }) {
   // Bloquear al irse a segundo plano.
   useEffect(() => {
     const suscripcion = AppState.addEventListener('change', (estado) => {
-      if (estado === 'background' && usuario !== null && activada && disponible) {
-        setBloqueada(true);
-      }
+      if (estado !== 'background') return;
+      if (promptAbierto.current) return; // es nuestro propio prompt, no la persona
+      if (usuario !== null && activada && disponible) setBloqueada(true);
     });
     return () => suscripcion.remove();
   }, [usuario, activada, disponible]);
@@ -89,12 +103,24 @@ export function BiometriaProvider({ children }) {
   // mojado, lector sucio), el sistema ofrece el PIN del dispositivo. Sin eso,
   // unos cuantos rechazos dejan a la persona afuera.
   const pedirHuella = async (mensaje) => {
-    const resultado = await LocalAuthentication.authenticateAsync({
-      promptMessage: mensaje,
-      cancelLabel: 'Cancelar',
-      disableDeviceFallback: false,
-    });
-    return resultado.success === true;
+    promptAbierto.current = true;
+    try {
+      const resultado = await LocalAuthentication.authenticateAsync({
+        promptMessage: mensaje,
+        cancelLabel: 'Cancelar',
+        disableDeviceFallback: false,
+      });
+      return resultado.success === true;
+    } finally {
+      // El evento de AppState del prompt llega DESPUÉS de que
+      // authenticateAsync resuelve, así que soltamos la bandera un toque más
+      // tarde. Si en ese segundo la persona manda la app a segundo plano a
+      // mano, no se bloquea — es un caso raro y el precio de que no entre en
+      // el loop.
+      setTimeout(() => {
+        promptAbierto.current = false;
+      }, MS_GRACIA_PROMPT);
+    }
   };
 
   // Activar pide la huella primero: así la persona comprueba en el momento que

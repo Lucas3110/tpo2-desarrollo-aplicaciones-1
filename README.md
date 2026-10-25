@@ -54,6 +54,38 @@ Si algo queda raro después de instalar dependencias:
 npx expo start --clear
 ```
 
+### Si la app dice "Sin conexión" aunque el backend esté andando
+
+Es lo primero que nos pasó y cuesta de encontrar, porque la app carga bien.
+
+Metro (el que sirve el JavaScript) llega al emulador por un **túnel de adb**
+que Expo arma solo para el puerto 8081. El backend no tiene ese túnel, así
+que el emulador tiene que alcanzarlo por la red — y el firewall de Windows
+bloquea la entrada al 3000. Resultado: la app abre, pero ningún pedido llega.
+
+La forma más rápida, y no necesita permisos de administrador:
+
+```bash
+adb reverse tcp:3000 tcp:3000
+```
+
+Con eso el `.env` queda así:
+
+```
+EXPO_PUBLIC_API_URL=http://localhost:3000/api
+```
+
+**Hay que volver a correrlo cada vez que arranca el emulador** — el túnel no
+sobrevive al reinicio.
+
+Si la terminal no te reconoce `adb`, está en
+`%LOCALAPPDATA%\Android\Sdk\platform-tools`. Conviene agregar esa carpeta al PATH.
+
+La alternativa es abrir el puerto 3000 en el firewall de Windows (eso sí pide
+administrador) y dejar `http://10.0.2.2:3000/api` en el `.env`. Si vas a probar
+en un **celular físico** por WiFi no te queda otra que esto: ahí no hay túnel
+que valga y la URL tiene que ser la IP de tu PC en la red.
+
 ---
 
 ## Expo Go y el development build

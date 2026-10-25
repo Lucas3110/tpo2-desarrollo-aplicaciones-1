@@ -19,7 +19,10 @@ export default function App() {
       <AuthProvider>
         <BiometriaProvider>
           <NavigationContainer>
-            <StatusBar style="light" />
+            {/* Iconos oscuros: las pantallas de sesion tienen fondo claro. Las de
+                adentro, que tienen el header verde, lo pisan con statusBarStyle
+                en MainNavigator. */}
+            <StatusBar style="dark" />
             <RootNavigator />
           </NavigationContainer>
         </BiometriaProvider>
