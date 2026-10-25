@@ -7,6 +7,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BuscadorScreen from '../screens/buscador/BuscadorScreen';
 import ConfiguracionScreen from '../screens/configuracion/ConfiguracionScreen';
+import PublicarScreen from '../screens/publicar/PublicarScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -31,7 +32,7 @@ export default function MainNavigator() {
       <Stack.Screen name="DetallePublicacion" component={pantallaPendiente('Detalle', 4)} options={{ title: 'Publicacion' }} />
 
       {/* Punto 5 - publicar */}
-      <Stack.Screen name="Publicar" component={pantallaPendiente('Publicar', 5)} options={{ title: 'Publicar' }} />
+      <Stack.Screen name="Publicar" component={PublicarScreen} options={{ title: 'Publicar' }} />
       <Stack.Screen name="MisPublicaciones" component={pantallaPendiente('Mis publicaciones', 5)} options={{ title: 'Mis publicaciones' }} />
 
       {/* Punto 2 - perfil */}
