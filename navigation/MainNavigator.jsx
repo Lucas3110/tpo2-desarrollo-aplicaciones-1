@@ -16,6 +16,8 @@ const opcionesHeader = {
   headerStyle: { backgroundColor: colors.primary },
   headerTintColor: colors.white,
   headerTitleStyle: { fontWeight: 'bold' },
+  // El header es verde oscuro: los iconos de la barra de estado van claros.
+  statusBarStyle: 'light',
 };
 
 export default function MainNavigator() {
