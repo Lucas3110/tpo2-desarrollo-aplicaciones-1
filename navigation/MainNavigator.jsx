@@ -6,6 +6,7 @@
 // cuando el otro mergee, se cambia el component y nada mas.
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BuscadorScreen from '../screens/buscador/BuscadorScreen';
+import ConfiguracionScreen from '../screens/configuracion/ConfiguracionScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -34,7 +35,7 @@ export default function MainNavigator() {
       {/* Punto 2 - perfil */}
       <Stack.Screen name="Perfil" component={pantallaPendiente('Mi perfil', 2)} options={{ title: 'Mi perfil' }} />
       <Stack.Screen name="PerfilPublico" component={pantallaPendiente('Perfil publico', 2)} options={{ title: 'Perfil' }} />
-      <Stack.Screen name="Configuracion" component={pantallaPendiente('Configuracion', 1)} options={{ title: 'Configuracion' }} />
+      <Stack.Screen name="Configuracion" component={ConfiguracionScreen} options={{ title: 'Configuracion' }} />
 
       {/* Punto 7 - reclamos */}
       <Stack.Screen name="Reclamar" component={pantallaPendiente('Reclamar', 7)} options={{ title: 'Reclamo' }} />
