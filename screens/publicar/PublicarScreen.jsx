@@ -27,6 +27,11 @@ import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import PasosIndicador from '../../components/PasosIndicador';
 import SelectorFotos from '../../components/SelectorFotos';
+import {
+  direccionDeCoordenadas,
+  formatearCoordenadas,
+  ubicacionActual,
+} from '../../services/ubicacionService';
 import SelectorLista from '../../components/SelectorLista';
 import SelectorOpciones from '../../components/SelectorOpciones';
 import {
@@ -77,6 +82,9 @@ export default function PublicarScreen({ navigation }) {
   const [franja, setFranja] = useState('NO_SE');
   const [barrioId, setBarrioId] = useState(null);
   const [direccion, setDireccion] = useState('');
+  const [coordenadas, setCoordenadas] = useState(null);
+  const [ubicando, setUbicando] = useState(false);
+  const [errorUbicacion, setErrorUbicacion] = useState(null);
   const [pregunta, setPregunta] = useState('');
   const [respuesta, setRespuesta] = useState('');
 
@@ -188,6 +196,7 @@ export default function PublicarScreen({ navigation }) {
         barrioId,
         direccion: direccion.trim() || null,
         fotos,
+        ...(coordenadas ? { lat: coordenadas.lat, lng: coordenadas.lng } : {}),
         // Sólo van en las de ENCONTRE: el backend rechaza una pérdida que las
         // traiga, así que no se mandan "por las dudas".
         ...(tipo === 'ENCONTRE'
@@ -199,6 +208,28 @@ export default function PublicarScreen({ navigation }) {
       setErrorPedido(e.message);
     } finally {
       setPublicando(false);
+    }
+  }
+
+  // Toma la ubicacion del dispositivo y, si puede, rellena la direccion.
+  async function tomarUbicacion() {
+    setErrorUbicacion(null);
+    setUbicando(true);
+    try {
+      const punto = await ubicacionActual();
+      setCoordenadas(punto);
+
+      // La direccion escrita es un extra: si el geocoder no contesta, las
+      // coordenadas igual quedaron guardadas, que es lo que importa.
+      // Y no pisamos lo que la persona ya haya escrito.
+      if (direccion.trim() === '') {
+        const calle = await direccionDeCoordenadas(punto);
+        if (calle) setDireccion(calle);
+      }
+    } catch (e) {
+      setErrorUbicacion(e.message);
+    } finally {
+      setUbicando(false);
     }
   }
 
@@ -215,6 +246,8 @@ export default function PublicarScreen({ navigation }) {
     setFranja('NO_SE');
     setBarrioId(null);
     setDireccion('');
+    setCoordenadas(null);
+    setErrorUbicacion(null);
     setPregunta('');
     setRespuesta('');
     setErrores({});
@@ -410,6 +443,21 @@ export default function PublicarScreen({ navigation }) {
                   : 'Nadie la ve hasta que aceptes a quien lo encontró'
               }
             />
+
+            <Aviso mensaje={errorUbicacion} />
+
+            <Boton
+              titulo={coordenadas ? 'Actualizar mi ubicación' : 'Usar mi ubicación actual'}
+              onPress={tomarUbicacion}
+              cargando={ubicando}
+              variante="secundario"
+            />
+
+            <Text style={styles.explicacion}>
+              {coordenadas
+                ? `Coordenadas guardadas: ${formatearCoordenadas(coordenadas)}`
+                : 'Las coordenadas ayudan a que te encuentren por cercanía. Son opcionales.'}
+            </Text>
           </>
         ) : null}
 
