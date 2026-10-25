@@ -4,11 +4,13 @@
 // existen quedan apuntando a pantallaPendiente(), asi el que necesita
 // navegar hacia una pantalla ajena puede hacerlo hoy sin esperar a nadie:
 // cuando el otro mergee, se cambia el component y nada mas.
+import { Text, TouchableOpacity } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BuscadorScreen from '../screens/buscador/BuscadorScreen';
 import ConfiguracionScreen from '../screens/configuracion/ConfiguracionScreen';
 import PublicarScreen from '../screens/publicar/PublicarScreen';
 import MisPublicacionesScreen from '../screens/publicar/MisPublicacionesScreen';
+import MenuScreen from '../screens/menu/MenuScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -26,7 +28,21 @@ export default function MainNavigator() {
   return (
     <Stack.Navigator screenOptions={opcionesHeader}>
       {/* Punto 3 - buscador guiado y resultados */}
-      <Stack.Screen name="Buscador" component={BuscadorScreen} options={{ title: 'Hallado' }} />
+      <Stack.Screen
+        name="Buscador"
+        component={BuscadorScreen}
+        options={({ navigation }) => ({
+          title: 'Hallado',
+          // El enunciado pide que al entrar se vea el buscador y nada mas,
+          // asi que el resto de la app cuelga de este boton.
+          headerRight: () => (
+            <TouchableOpacity onPress={() => navigation.navigate('Menu')} hitSlop={12}>
+              <Text style={{ color: colors.white, fontSize: 15, fontWeight: 'bold' }}>Menu</Text>
+            </TouchableOpacity>
+          ),
+        })}
+      />
+      <Stack.Screen name="Menu" component={MenuScreen} options={{ title: 'Menu' }} />
       <Stack.Screen name="Resultados" component={pantallaPendiente('Resultados', 3)} options={{ title: 'Resultados' }} />
 
       {/* Punto 4 - detalle */}

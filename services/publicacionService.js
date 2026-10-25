@@ -69,3 +69,32 @@ export async function eliminarPublicacion(id) {
   const { data } = await apiClient.delete(`/hallado/publicaciones/${id}`);
   return data;
 }
+
+// GET /hallado/publicaciones
+//
+// El buscador del punto 3. Ojo con `queTePaso`: NO es el tipo que se quiere
+// ver, es lo que le paso a la persona. El backend devuelve el OPUESTO, que
+// es lo que pide el enunciado ("si perdiste algo, ves lo que otros
+// encontraron"). Se llama asi justamente para que no se pueda confundir.
+//
+// Devuelve { publicaciones, paginado }.
+export async function buscarPublicaciones(criterios) {
+  const { data } = await apiClient.get('/hallado/publicaciones', {
+    // axios saltea los undefined, asi que los filtros vacios no viajan.
+    params: {
+      queTePaso: criterios.queTePaso,
+      q: criterios.q || undefined,
+      categoriaId: criterios.categoriaId || undefined,
+      barrioId: criterios.barrioId || undefined,
+      cuando: criterios.cuando || undefined,
+      desde: criterios.desde || undefined,
+      hasta: criterios.hasta || undefined,
+      orden: criterios.orden || undefined,
+      lat: criterios.coordenadas?.lat,
+      lng: criterios.coordenadas?.lng,
+      pagina: criterios.pagina || undefined,
+      limite: criterios.limite || undefined,
+    },
+  });
+  return data;
+}
