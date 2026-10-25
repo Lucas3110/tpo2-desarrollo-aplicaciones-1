@@ -26,6 +26,7 @@ import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import PasosIndicador from '../../components/PasosIndicador';
+import SelectorFotos from '../../components/SelectorFotos';
 import SelectorLista from '../../components/SelectorLista';
 import SelectorOpciones from '../../components/SelectorOpciones';
 import {
@@ -67,6 +68,7 @@ export default function PublicarScreen({ navigation }) {
 
   // Formulario
   const [tipo, setTipo] = useState(null);
+  const [fotos, setFotos] = useState([]);
   const [categoriaId, setCategoriaId] = useState(null);
   const [titulo, setTitulo] = useState('');
   const [descripcion, setDescripcion] = useState('');
@@ -108,6 +110,7 @@ export default function PublicarScreen({ navigation }) {
   // de guardarse para que cambiar el tipo en el paso 1 reordene todo solo.
   const pasos = [
     { clave: 'tipo', titulo: '¿Qué te pasó?' },
+    { clave: 'fotos', titulo: 'Fotos' },
     { clave: 'que', titulo: '¿Qué es?' },
     { clave: 'cuando', titulo: '¿Cuándo fue?' },
     { clave: 'donde', titulo: '¿Dónde?' },
@@ -184,6 +187,7 @@ export default function PublicarScreen({ navigation }) {
         franjaHoraria: franja,
         barrioId,
         direccion: direccion.trim() || null,
+        fotos,
         // Sólo van en las de ENCONTRE: el backend rechaza una pérdida que las
         // traiga, así que no se mandan "por las dudas".
         ...(tipo === 'ENCONTRE'
@@ -202,6 +206,7 @@ export default function PublicarScreen({ navigation }) {
     setPublicada(null);
     setPaso(0);
     setTipo(null);
+    setFotos([]);
     setCategoriaId(null);
     setTitulo('');
     setDescripcion('');
@@ -286,6 +291,18 @@ export default function PublicarScreen({ navigation }) {
             error={errores.tipo}
             columnas
           />
+        ) : null}
+
+        {pasoActual.clave === 'fotos' ? (
+          <>
+            <Text style={styles.explicacion}>
+              {tipo === 'PERDI'
+                ? 'Si tenés una foto de lo que perdiste, ayuda un montón a que alguien lo reconozca.'
+                : 'Mostrá lo que encontraste, pero sin el detalle que vas a preguntar después para verificar.'}
+            </Text>
+            <SelectorFotos urls={fotos} onCambiar={setFotos} />
+            <Text style={styles.explicacion}>Podés seguir sin fotos y agregarlas después.</Text>
+          </>
         ) : null}
 
         {pasoActual.clave === 'que' ? (
