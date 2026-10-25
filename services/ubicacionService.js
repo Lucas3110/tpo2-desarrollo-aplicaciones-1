@@ -12,9 +12,10 @@ import * as Location from 'expo-location';
 // es más que suficiente.
 const PRECISION = Location.Accuracy.Balanced;
 
-// Cuánto esperamos antes de rendirnos. Sin esto, si el GPS no engancha la
-// pantalla queda cargando para siempre sin decir nada.
-const TIMEOUT_MS = 15000;
+// Cuánto esperamos cada intento antes de pasar al siguiente. El del GPS
+// espera más porque tarda más, sobre todo la primera vez.
+const TIMEOUT_BALANCEADO_MS = 8000;
+const TIMEOUT_GPS_MS = 20000;
 
 export class ErrorUbicacion extends Error {
   constructor(mensaje, codigo) {
@@ -43,44 +44,59 @@ export async function ubicacionActual() {
     );
   }
 
-  // expo-location no tiene timeout propio, así que lo ponemos nosotros.
-  // La promesa que pierde no se cancela, pero queda huérfana y no molesta.
   let posicion;
   try {
-    posicion = await Promise.race([
-      Location.getCurrentPositionAsync({ accuracy: PRECISION }),
-      new Promise((_, rechazar) =>
-        setTimeout(
-          () =>
-            rechazar(
-              new ErrorUbicacion(
-                'No pudimos ubicarte. Probá de nuevo o escribí la dirección a mano.',
-                'TIMEOUT'
-              )
-            ),
-          TIMEOUT_MS
-        )
-      ),
-    ]);
-  } catch (e) {
-    // Antes de darnos por vencidos: la última posición conocida.
-    //
-    // Si el teléfono tiene la precisión baja o el GPS no engancha, pedir una
-    // lectura nueva falla, pero el sistema casi siempre guarda la última que
-    // tomó. Para "¿en qué esquina lo encontraste?" una posición de hace unos
-    // minutos sirve igual, y es muchísimo mejor que no tener ninguna.
-    const ultima = await ultimaConocida();
-    if (ultima) return ultima;
+    // Primero Balanced, que es lo normal y lo rápido.
+    posicion = await conTimeout(PRECISION, TIMEOUT_BALANCEADO_MS);
+  } catch (primerError) {
+    try {
+      // Si no contestó, se insiste con el GPS.
+      //
+      // Balanced se apoya en WiFi y antenas, y hay dos situaciones donde eso
+      // no existe: un emulador (que sólo tiene un GPS simulado) y un celular
+      // real en un lugar sin redes conocidas. En las dos, el GPS sí contesta,
+      // sólo que tarda más. Por eso el segundo intento espera el doble.
+      posicion = await conTimeout(Location.Accuracy.High, TIMEOUT_GPS_MS);
+    } catch (segundoError) {
+      // Antes de darnos por vencidos: la última posición conocida.
+      //
+      // Si ni el GPS engancha, el sistema casi siempre guarda la última
+      // lectura que tomó. Para "¿en qué esquina lo encontraste?" una posición
+      // de hace unos minutos sirve igual, y es mucho mejor que ninguna.
+      const ultima = await ultimaConocida();
+      if (ultima) return ultima;
 
-    // Los errores que ya tradujimos pasan de largo.
-    if (e instanceof ErrorUbicacion) throw e;
-    throw traducir(e);
+      // Los errores que ya tradujimos pasan de largo.
+      if (segundoError instanceof ErrorUbicacion) throw segundoError;
+      throw traducir(segundoError);
+    }
   }
 
   return {
     lat: posicion.coords.latitude,
     lng: posicion.coords.longitude,
   };
+}
+
+// expo-location no trae timeout propio, así que lo ponemos nosotros. La
+// promesa que pierde la carrera no se cancela, pero queda huérfana y no
+// molesta a nadie.
+async function conTimeout(precision, ms) {
+  return Promise.race([
+    Location.getCurrentPositionAsync({ accuracy: precision }),
+    new Promise((_, rechazar) =>
+      setTimeout(
+        () =>
+          rechazar(
+            new ErrorUbicacion(
+              'No pudimos ubicarte. Probá de nuevo o escribí la dirección a mano.',
+              'TIMEOUT'
+            )
+          ),
+        ms
+      )
+    ),
+  ]);
 }
 
 // Devuelve la última posición que registró el sistema, o null.
