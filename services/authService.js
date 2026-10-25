@@ -67,3 +67,35 @@ export async function obtenerPerfil() {
   const { data } = await apiClient.get('/auth/me');
   return data;
 }
+
+// POST /auth/password/recuperar
+//
+// Manda un codigo al email para poder definir una contrasena nueva. Llamarla
+// otra vez es el "reenviar" que pide el enunciado: el backend invalida el
+// codigo anterior y manda uno nuevo, con un cooldown de unos segundos.
+//
+// Importante: contesta 200 exista o no el email. Es a proposito, para que
+// nadie pueda averiguar quien tiene cuenta. O sea que un 200 NO garantiza
+// que el mail salio, y la pantalla no puede decirle "te lo mandamos" como si
+// fuera un hecho.
+export async function recuperarPassword(email) {
+  const { data } = await apiClient.post('/auth/password/recuperar', { email });
+  return data;
+}
+
+// POST /auth/password/restablecer
+//
+// Con el codigo correcto define la contrasena nueva y devuelve
+// { token, usuario }: la sesion queda abierta, asi no hay que loguearse justo
+// despues de elegir la contrasena.
+//
+// El backend valida la contrasena ANTES de consumir el codigo, asi que si es
+// corta el codigo sigue sirviendo.
+export async function restablecerPassword({ email, codigo, password }) {
+  const { data } = await apiClient.post('/auth/password/restablecer', {
+    email,
+    codigo,
+    password,
+  });
+  return data;
+}
