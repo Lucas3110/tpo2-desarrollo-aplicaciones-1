@@ -8,7 +8,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegistroEmailScreen from '../screens/auth/RegistroEmailScreen';
 import VerificarCodigoScreen from '../screens/auth/VerificarCodigoScreen';
-import { pantallaPendiente } from '../components/PantallaPendiente';
+import RecuperarPasswordScreen from '../screens/auth/RecuperarPasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -18,9 +18,7 @@ export default function AuthNavigator() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Registro" component={RegistroEmailScreen} />
       <Stack.Screen name="VerificarCodigo" component={VerificarCodigoScreen} />
-
-      {/* Punto 1: la reemplaza la rama del recupero de contrasena */}
-      <Stack.Screen name="RecuperarPassword" component={pantallaPendiente('Recuperar contrasena', 1)} />
+      <Stack.Screen name="RecuperarPassword" component={RecuperarPasswordScreen} />
     </Stack.Navigator>
   );
 }
