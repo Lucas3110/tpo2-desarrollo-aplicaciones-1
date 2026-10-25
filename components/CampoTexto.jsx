@@ -6,13 +6,16 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, fontSizes, radius, spacing } from '../config/theme';
 
-export default function CampoTexto({ etiqueta, error, ayuda, ...resto }) {
+export default function CampoTexto({ etiqueta, error, ayuda, style, ...resto }) {
   return (
     <View style={styles.contenedor}>
       <Text style={styles.etiqueta}>{etiqueta}</Text>
 
+      {/* `style` se saca de `resto` y se suma al final a propósito. Si viajara
+          adentro del spread, reemplazaría al array entero y el campo perdería
+          el borde, el fondo y el padding. Así se agrega encima. */}
       <TextInput
-        style={[styles.input, error ? styles.inputConError : null]}
+        style={[styles.input, error ? styles.inputConError : null, style]}
         placeholderTextColor={colors.textSecondary}
         {...resto}
       />
