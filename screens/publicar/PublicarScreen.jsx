@@ -28,6 +28,14 @@ import CampoTexto from '../../components/CampoTexto';
 import PasosIndicador from '../../components/PasosIndicador';
 import SelectorFotos from '../../components/SelectorFotos';
 import {
+  borrarBorrador,
+  describirBorrador,
+  guardarBorrador,
+  leerBorrador,
+  valeLaPenaGuardar,
+} from '../../services/borradorService';
+import { useAuth } from '../../hooks/useAuth';
+import {
   direccionDeCoordenadas,
   formatearCoordenadas,
   ubicacionActual,
@@ -65,6 +73,8 @@ const TITULO_MAX = 80;
 const DESCRIPCION_MAX = 2000;
 
 export default function PublicarScreen({ navigation }) {
+  const { usuario } = useAuth();
+
   // Catálogos
   const [categorias, setCategorias] = useState([]);
   const [barrios, setBarrios] = useState([]);
@@ -95,9 +105,78 @@ export default function PublicarScreen({ navigation }) {
   const [publicando, setPublicando] = useState(false);
   const [publicada, setPublicada] = useState(null);
 
+  // Borrador
+  const [borradorPendiente, setBorradorPendiente] = useState(null);
+  const [borradorListo, setBorradorListo] = useState(false);
+
   useEffect(() => {
     cargarCatalogos();
   }, []);
+
+  // Al entrar, miramos si quedo algo a medio cargar de la vez anterior. No se
+  // restaura solo: se le pregunta. Pisarle el formulario sin avisar es peor
+  // que perder el borrador, porque no hay forma de deshacerlo.
+  useEffect(() => {
+    const buscar = async () => {
+      const guardado = await leerBorrador(usuario?.id);
+      if (guardado) setBorradorPendiente(guardado);
+      setBorradorListo(true);
+    };
+    buscar();
+  }, [usuario?.id]);
+
+  // Y cada vez que cambia algo, lo guardamos.
+  //
+  // Va despues de borradorListo a proposito: si guardaramos antes de haber
+  // leido, el formulario vacio del arranque pisaria el borrador viejo y la
+  // persona lo perderia justo al abrir la pantalla.
+  useEffect(() => {
+    if (!borradorListo || publicada) return;
+
+    const datos = formularioActual();
+    if (valeLaPenaGuardar(datos)) guardarBorrador(usuario?.id, datos);
+  }, [
+    borradorListo, publicada, usuario?.id,
+    tipo, fotos, categoriaId, titulo, descripcion,
+    fechaTexto, franja, barrioId, direccion, coordenadas, pregunta, respuesta,
+  ]);
+
+  // Todo el formulario en un objeto. Sirve para guardar el borrador y para
+  // restaurarlo, asi no hay dos listas de campos que se puedan desincronizar.
+  function formularioActual() {
+    return {
+      tipo, fotos, categoriaId, titulo, descripcion,
+      fechaTexto, franja, barrioId, direccion, coordenadas, pregunta, respuesta,
+      paso,
+    };
+  }
+
+  function restaurarBorrador() {
+    const d = borradorPendiente.datos;
+    setTipo(d.tipo ?? null);
+    setFotos(d.fotos ?? []);
+    setCategoriaId(d.categoriaId ?? null);
+    setTitulo(d.titulo ?? '');
+    setDescripcion(d.descripcion ?? '');
+    setFechaTexto(d.fechaTexto ?? isoATexto(hoyIso()));
+    setFranja(d.franja ?? 'NO_SE');
+    setBarrioId(d.barrioId ?? null);
+    setDireccion(d.direccion ?? '');
+    setCoordenadas(d.coordenadas ?? null);
+    setPregunta(d.pregunta ?? '');
+    setRespuesta(d.respuesta ?? '');
+    // El paso se acota por las dudas: si el borrador es viejo y la cantidad
+    // de pasos cambio, un indice guardado podria quedar fuera de rango.
+    const total = d.tipo === 'ENCONTRE' ? 6 : 5;
+    setPaso(Math.min(d.paso ?? 0, total - 1));
+    setBorradorPendiente(null);
+  }
+
+  async function descartarBorrador() {
+    await borrarBorrador(usuario?.id);
+    setBorradorPendiente(null);
+  }
+
 
   async function cargarCatalogos() {
     setCargandoCatalogos(true);
@@ -204,6 +283,8 @@ export default function PublicarScreen({ navigation }) {
           : {}),
       });
       setPublicada(creada);
+      // Ya se publico: el borrador no tiene mas razon de existir.
+      await borrarBorrador(usuario?.id);
     } catch (e) {
       setErrorPedido(e.message);
     } finally {
@@ -234,6 +315,7 @@ export default function PublicarScreen({ navigation }) {
   }
 
   function empezarDeNuevo() {
+    borrarBorrador(usuario?.id);
     setPublicada(null);
     setPaso(0);
     setTipo(null);
@@ -271,6 +353,22 @@ export default function PublicarScreen({ navigation }) {
       <View style={styles.centrado}>
         <Aviso mensaje={errorCatalogos} />
         <Boton titulo="Reintentar" onPress={cargarCatalogos} />
+      </View>
+    );
+  }
+
+  if (borradorPendiente) {
+    return (
+      <View style={styles.centrado}>
+        <Text style={styles.exitoTitulo}>Tenés algo a medio cargar</Text>
+        <Text style={styles.exitoTexto}>
+          Dejaste sin publicar {describirBorrador(borradorPendiente.datos)}.
+        </Text>
+
+        <View style={styles.exitoBotones}>
+          <Boton titulo="Seguir donde lo dejé" onPress={restaurarBorrador} />
+          <Boton titulo="Empezar de cero" onPress={descartarBorrador} variante="secundario" />
+        </View>
       </View>
     );
   }
