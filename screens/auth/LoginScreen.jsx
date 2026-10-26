@@ -28,7 +28,7 @@ import { validarEmail, validarFormulario } from '../../utils/validaciones';
 import { colors, fontSizes, spacing } from '../../config/theme';
 
 export default function LoginScreen({ navigation }) {
-  const { iniciarSesion } = useAuth();
+  const { iniciarSesion, motivoCierre } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -73,6 +73,10 @@ export default function LoginScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
         <Text style={styles.titulo}>Hallado</Text>
         <Text style={styles.bajada}>Objetos y mascotas perdidas</Text>
+
+        {/* Por qué la sacaron, si vino de un cierre automático. Va antes
+            del error del intento actual porque explica por qué está acá. */}
+        {errorPedido === null ? <Aviso mensaje={motivoCierre} tipo="info" /> : null}
 
         <Aviso mensaje={errorPedido} />
 
