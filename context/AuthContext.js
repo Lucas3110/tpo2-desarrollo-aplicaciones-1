@@ -3,7 +3,7 @@
 //
 // Este contexto administra la sesión: guardarla, restaurarla y borrarla. Los
 // pedidos al backend viven en services/authService.js.
-import { createContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useRef, useState } from 'react';
 import { registrarCierreDeSesion } from '../services/apiClient';
 import { obtenerPerfil } from '../services/authService';
 import {
@@ -17,6 +17,10 @@ import {
 
 export const AuthContext = createContext(null);
 
+// Cuánto queda en pantalla el aviso de que se cerró la sesión. Alcanza para
+// leer una línea; más que eso ya es un cartel fijo.
+const MS_AVISO_CIERRE = 3000;
+
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
   // Arranca en true: hasta que no sepamos si había sesión guardada no podemos
@@ -27,7 +31,27 @@ export function AuthProvider({ children }) {
   // Por qué se cerró la sesión, para poder decírselo en el login. Si la
   // persona no sabe por qué la sacaron, lo único que puede pensar es que la
   // app se rompió.
+  //
+  // Es un aviso, no un error: se va solo. Un cartel que queda fijo arriba del
+  // formulario termina siendo parte del decorado y encima tapa el error del
+  // intento que la persona esté haciendo ahora.
   const [motivoCierre, setMotivoCierre] = useState(null);
+  const temporizadorAviso = useRef(null);
+
+  const avisarCierre = (motivo) => {
+    if (temporizadorAviso.current) clearTimeout(temporizadorAviso.current);
+    setMotivoCierre(motivo);
+    temporizadorAviso.current = setTimeout(() => {
+      setMotivoCierre(null);
+      temporizadorAviso.current = null;
+    }, MS_AVISO_CIERRE);
+  };
+
+  const olvidarCierre = () => {
+    if (temporizadorAviso.current) clearTimeout(temporizadorAviso.current);
+    temporizadorAviso.current = null;
+    setMotivoCierre(null);
+  };
 
   useEffect(() => {
     restaurarSesion();
@@ -43,9 +67,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     registrarCierreDeSesion(async (motivo) => {
       await limpiar();
-      setMotivoCierre(motivo);
+      avisarCierre(motivo);
     });
-    return () => registrarCierreDeSesion(null);
+    return () => {
+      registrarCierreDeSesion(null);
+      if (temporizadorAviso.current) clearTimeout(temporizadorAviso.current);
+    };
   }, []);
 
   async function restaurarSesion() {
@@ -91,7 +118,7 @@ export function AuthProvider({ children }) {
 
   // La llaman el login y el registro cuando el backend devolvió token + usuario.
   const iniciarSesion = async (token, datosUsuario) => {
-    setMotivoCierre(null);
+    olvidarCierre();
     await guardarToken(token);
     await guardarUsuario(datosUsuario);
     setUsuario(datosUsuario);
