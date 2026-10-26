@@ -12,7 +12,8 @@
 //
 // Mismo criterio que el wizard de publicar: un solo componente con un estado
 // `paso`, porque los pasos comparten todo el formulario.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -30,6 +31,11 @@ import PasosIndicador from '../../components/PasosIndicador';
 import SelectorLista from '../../components/SelectorLista';
 import SelectorOpciones from '../../components/SelectorOpciones';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  borrarBusquedas,
+  guardarBusqueda,
+  leerBusquedas,
+} from '../../services/historialBusquedasService';
 import { obtenerBarrios, obtenerCategorias } from '../../services/publicacionService';
 import { formatearCoordenadas, ubicacionActual } from '../../services/ubicacionService';
 import { hoyIso, isoATexto, isoDeHace, textoAIso } from '../../utils/fechas';
@@ -76,9 +82,27 @@ export default function BuscadorScreen({ navigation }) {
   const [ubicando, setUbicando] = useState(false);
   const [errorUbicacion, setErrorUbicacion] = useState(null);
 
+  // Punto 3: "el buscador muestra las ultimas busquedas realizadas para
+  // poder repetirlas con un toque".
+  const [ultimas, setUltimas] = useState([]);
+
   useEffect(() => {
     cargarCatalogos();
   }, []);
+
+  // Se releen cada vez que se vuelve a esta pantalla: si acaba de buscar,
+  // esa busqueda tiene que aparecer arriba al volver.
+  useFocusEffect(
+    useCallback(() => {
+      leerBusquedas(usuario?.id).then(setUltimas);
+      // Y se vuelve al primer paso. Al volver de los resultados el wizard
+      // quedaba en la ultima pregunta, y asi las ultimas busquedas no se
+      // veian nunca, que es justo lo que el enunciado pide mostrar. Las
+      // respuestas NO se borran: con tres toques en Continuar se vuelve
+      // adonde estaba.
+      setPaso(0);
+    }, [usuario?.id])
+  );
 
   async function cargarCatalogos() {
     setCargandoCatalogos(true);
@@ -150,7 +174,22 @@ export default function BuscadorScreen({ navigation }) {
       barrio: barrios.find((b) => b.id === barrioId)?.nombre ?? null,
     };
 
+    guardarBusqueda(usuario?.id, criterios, etiquetas);
     navigation.navigate('Resultados', { criterios, etiquetas });
+  }
+
+  // Repetir una busqueda guardada es ir derecho a los resultados: no tiene
+  // sentido hacerle contestar de nuevo las cuatro preguntas.
+  function repetir(busqueda) {
+    navigation.navigate('Resultados', {
+      criterios: busqueda.criterios,
+      etiquetas: busqueda.etiquetas,
+    });
+  }
+
+  async function limpiarUltimas() {
+    await borrarBusquedas(usuario?.id);
+    setUltimas([]);
   }
 
   async function tomarUbicacion() {
@@ -308,6 +347,30 @@ export default function BuscadorScreen({ navigation }) {
           </>
         ) : null}
 
+        {paso === 0 && ultimas.length > 0 ? (
+          <View style={styles.ultimas}>
+            <View style={styles.ultimasEncabezado}>
+              <Text style={styles.ultimasTitulo}>Tus últimas búsquedas</Text>
+              <TouchableOpacity onPress={limpiarUltimas} hitSlop={8}>
+                <Text style={styles.enlace}>Borrar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {ultimas.map((busqueda) => (
+              <TouchableOpacity
+                key={busqueda.id}
+                style={styles.ultima}
+                onPress={() => repetir(busqueda)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.ultimaTexto} numberOfLines={1}>
+                  {busqueda.resumen}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+
         <View style={styles.botones}>
           <Boton titulo={esUltimo ? 'Buscar' : 'Continuar'} onPress={avanzar} />
 
@@ -362,6 +425,34 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.border,
     paddingLeft: spacing.md,
     borderRadius: radius.sm,
+  },
+  ultimas: {
+    marginTop: spacing.lg,
+  },
+  ultimasEncabezado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  ultimasTitulo: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  ultima: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    marginBottom: spacing.sm,
+  },
+  ultimaTexto: {
+    fontSize: fontSizes.sm,
+    color: colors.text,
   },
   botones: {
     marginTop: spacing.lg,
