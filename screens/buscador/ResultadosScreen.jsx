@@ -42,7 +42,10 @@ export default function ResultadosScreen({ navigation, route }) {
   const { criterios: criteriosIniciales, etiquetas } = route.params;
 
   const [criterios, setCriterios] = useState(criteriosIniciales);
-  const [publicaciones, setPublicaciones] = useState([]);
+  // null = todavia no cargo nunca. [] = cargo y no hay resultados. Son dos
+  // cosas distintas: la primera merece el spinner de pantalla completa, la
+  // segunda el estado "sin resultados".
+  const [publicaciones, setPublicaciones] = useState(null);
   const [paginado, setPaginado] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
@@ -81,7 +84,7 @@ export default function ResultadosScreen({ navigation, route }) {
 
         // La primera página reemplaza; las siguientes se suman.
         setPublicaciones((previas) =>
-          pagina === 1 ? datos.publicaciones : [...previas, ...datos.publicaciones]
+          pagina === 1 ? datos.publicaciones : [...(previas ?? []), ...datos.publicaciones]
         );
         setPaginado(datos.paginado);
       } catch (e) {
@@ -102,7 +105,6 @@ export default function ResultadosScreen({ navigation, route }) {
 
   function aplicarFiltros(nuevos) {
     setPanelAbierto(false);
-    setPublicaciones([]);
     setCriterios({ ...criterios, ...nuevos });
   }
 
@@ -110,15 +112,24 @@ export default function ResultadosScreen({ navigation, route }) {
     // Ordenar por cercanía sin coordenadas lo rechaza el backend, así que
     // ni se ofrece: el botón aparece sólo si hay de dónde medir.
     if (orden === criterios.orden) return;
-    setPublicaciones([]);
     setCriterios({ ...criterios, orden });
   }
 
   const hayCoordenadas = Boolean(criterios.coordenadas);
 
+  // Cambiar el orden o los filtros recarga la lista entera. Antes eso vaciaba
+  // las publicaciones y se veian tres pantallas en menos de un segundo: la
+  // lista, el estado "sin resultados" y el spinner de pantalla completa. Un
+  // parpadeo feo por algo que tarda 200 ms.
+  //
+  // Ahora lo anterior se queda atenuado hasta que llega lo nuevo. Es el mismo
+  // criterio que ya usabamos para el refresco que falla: nunca sacarle de la
+  // pantalla algo util a alguien que no hizo nada malo.
+  const recargando = cargando && !refrescando;
+
   // ---------------------------------------------------------------
 
-  if (cargando && publicaciones.length === 0) {
+  if (publicaciones === null) {
     return (
       <View style={styles.centrado}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -136,7 +147,7 @@ export default function ResultadosScreen({ navigation, route }) {
           onPress={() => setPanelAbierto(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.textoBarra}>Refinar</Text>
+          <Text style={styles.textoBarra}>Ajustar</Text>
         </TouchableOpacity>
 
         <View style={styles.ordenes}>
@@ -180,6 +191,10 @@ export default function ResultadosScreen({ navigation, route }) {
         </View>
       ) : null}
 
+      <View
+        style={[styles.contenedorLista, recargando ? styles.atenuado : null]}
+        pointerEvents={recargando ? 'none' : 'auto'}
+      >
       <FlatList
         data={publicaciones}
         keyExtractor={(item) => String(item.id)}
@@ -204,7 +219,7 @@ export default function ResultadosScreen({ navigation, route }) {
         ListFooterComponent={
           cargandoMas ? (
             <ActivityIndicator style={styles.pie} color={colors.primary} />
-          ) : paginado && !paginado.hayMas && publicaciones.length > 0 ? (
+          ) : paginado && !paginado.hayMas && publicaciones.length > 0 && !recargando ? (
             <Text style={styles.pieTexto}>No hay más resultados</Text>
           ) : null
         }
@@ -223,6 +238,7 @@ export default function ResultadosScreen({ navigation, route }) {
           />
         )}
       />
+      </View>
 
       <PanelFiltros
         visible={panelAbierto}
@@ -308,7 +324,7 @@ function PanelFiltros({ visible, criterios, categorias, barrios, onCerrar, onApl
     <Modal visible={visible} animationType="slide" onRequestClose={onCerrar}>
       <View style={styles.modal}>
         <View style={styles.modalEncabezado}>
-          <Text style={styles.modalTitulo}>Refinar la búsqueda</Text>
+          <Text style={styles.modalTitulo}>Ajustar la búsqueda</Text>
           <TouchableOpacity onPress={onCerrar}>
             <Text style={styles.enlace}>Cerrar</Text>
           </TouchableOpacity>
@@ -366,6 +382,12 @@ function PanelFiltros({ visible, criterios, categorias, barrios, onCerrar, onApl
 }
 
 const styles = StyleSheet.create({
+  contenedorLista: {
+    flex: 1,
+  },
+  atenuado: {
+    opacity: 0.35,
+  },
   pantalla: {
     flex: 1,
     backgroundColor: colors.background,
