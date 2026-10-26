@@ -14,9 +14,10 @@ import apiClient from './apiClient';
 // "reenviar": el backend invalida el código anterior y manda uno nuevo
 // (con un cooldown de unos segundos en el medio).
 //
-// Devuelve { mensaje, codigoDesarrollo }. codigoDesarrollo solo viene si el
-// backend está con OTP_EXPOSE_IN_RESPONSE=true, que es como lo corremos en
-// desarrollo para no tener que abrir el mail.
+// Devuelve { mensaje }. El código no vuelve por acá: viaja solo por mail,
+// que es lo que pide el enunciado ("recibir un código por email"). Mientras
+// desarrollamos, el backend con MAIL_MODE=console lo imprime en su terminal
+// en vez de mandarlo.
 export async function solicitarRegistro(email) {
   const { data } = await apiClient.post('/auth/registro/solicitar', { email });
   return data;

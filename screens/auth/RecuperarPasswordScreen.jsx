@@ -48,7 +48,6 @@ export default function RecuperarPasswordScreen({ navigation }) {
   const [errores, setErrores] = useState({});
   const [errorPedido, setErrorPedido] = useState(null);
   const [aviso, setAviso] = useState(null);
-  const [codigoDesarrollo, setCodigoDesarrollo] = useState(null);
   const [trabajando, setTrabajando] = useState(false);
 
   const pedirCodigo = async ({ esReenvio = false } = {}) => {
@@ -62,8 +61,7 @@ export default function RecuperarPasswordScreen({ navigation }) {
 
     setTrabajando(true);
     try {
-      const respuesta = await recuperarPassword(emailLimpio);
-      setCodigoDesarrollo(respuesta.codigoDesarrollo ?? null);
+      await recuperarPassword(emailLimpio);
       setAviso(
         esReenvio
           ? 'Te mandamos un código nuevo.'
@@ -117,12 +115,6 @@ export default function RecuperarPasswordScreen({ navigation }) {
             ? 'Te mandamos un código al email de tu cuenta.'
             : `Escribí el código que te llegó a ${email.trim().toLowerCase()} y elegí una contraseña nueva.`}
         </Text>
-
-        {/* En desarrollo el backend devuelve el código en la respuesta para no
-            tener que abrir el mail. En producción no viene y esto no se ve. */}
-        {__DEV__ && codigoDesarrollo ? (
-          <Aviso mensaje={`Código (solo en desarrollo): ${codigoDesarrollo}`} tipo="info" />
-        ) : null}
 
         <Aviso mensaje={errorPedido} />
         <Aviso mensaje={aviso} tipo="exito" />

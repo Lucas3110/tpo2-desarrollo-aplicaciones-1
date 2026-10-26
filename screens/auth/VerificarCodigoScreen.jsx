@@ -31,7 +31,7 @@ import {
 import { colors, fontSizes, spacing } from '../../config/theme';
 
 export default function VerificarCodigoScreen({ navigation, route }) {
-  const { email, codigoDesarrollo } = route.params;
+  const { email } = route.params;
   const { iniciarSesion } = useAuth();
 
   const [codigo, setCodigo] = useState('');
@@ -101,12 +101,6 @@ export default function VerificarCodigoScreen({ navigation, route }) {
         <Text style={styles.bajada}>
           Te mandamos un código de {LIMITES.LARGO_CODIGO} números a {email}
         </Text>
-
-        {/* En desarrollo el backend devuelve el código en la respuesta para no
-            tener que abrir el mail. En producción no viene y esto no se ve. */}
-        {__DEV__ && codigoDesarrollo ? (
-          <Aviso mensaje={`Código (solo en desarrollo): ${codigoDesarrollo}`} tipo="info" />
-        ) : null}
 
         <Aviso mensaje={errorPedido} />
         <Aviso mensaje={aviso} tipo="exito" />

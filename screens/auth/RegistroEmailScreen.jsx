@@ -37,11 +37,8 @@ export default function RegistroEmailScreen({ navigation }) {
 
     setEnviando(true);
     try {
-      const respuesta = await solicitarRegistro(emailLimpio);
-      navigation.navigate('VerificarCodigo', {
-        email: emailLimpio,
-        codigoDesarrollo: respuesta.codigoDesarrollo,
-      });
+      await solicitarRegistro(emailLimpio);
+      navigation.navigate('VerificarCodigo', { email: emailLimpio });
     } catch (e) {
       // e es un ErrorApi: ya viene con el mensaje del backend o con el de
       // "sin conexión" si no se pudo llegar al servidor.
