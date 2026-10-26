@@ -25,15 +25,51 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Response: traduce el error del backend a algo que las pantallas puedan mostrar.
-// El backend contesta { error: { codigo, mensaje } }, y cuando no hay red
-// axios no trae response ninguna.
+// Qué hacer cuando el backend dice que la sesión ya no vale.
+//
+// Lo registra AuthContext, que es el único que sabe cómo cerrar sesión. El
+// cliente no puede importarlo: este archivo es JavaScript puro y AuthContext
+// es un componente de React, así que importarlo sería una dependencia
+// circular.
+let alPerderLaSesion = null;
+
+export function registrarCierreDeSesion(manejador) {
+  alPerderLaSesion = manejador;
+}
+
+// Response: traduce el error del backend a algo que las pantallas puedan
+// mostrar, y además vigila los 401.
+//
+// Por qué el 401 se maneja ACÁ y no en cada pantalla: es el único lugar por
+// donde pasan todos los pedidos. Si cada pantalla tuviera que acordarse de
+// revisar el 401, alcanza con que una se olvide para que la persona quede
+// viendo "Token inválido" sin entender qué le pasó: que es exactamente lo
+// que estaba pasando.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    throw normalizarError(error);
+    const normalizado = normalizarError(error);
+
+    // Solo si el pedido llevaba token. Un 401 del login es "la contraseña
+    // está mal", no "se venció la sesión", y cerrar sesión ahí no tendría
+    // sentido: no hay ninguna abierta.
+    const llevabaToken = Boolean(error.config?.headers?.Authorization);
+    if (normalizado.estado === 401 && llevabaToken && alPerderLaSesion) {
+      alPerderLaSesion(mensajeDeCierre(normalizado.codigo));
+    }
+
+    throw normalizado;
   }
 );
+
+// Por qué se cerró, en palabras. Si la persona no sabe por qué la sacaron,
+// lo único que puede pensar es que la app se rompió.
+function mensajeDeCierre(codigo) {
+  if (codigo === 'TOKEN_EXPIRADO') {
+    return 'Tu sesión venció. Ingresá de nuevo.';
+  }
+  return 'Tu sesión dejó de ser válida. Ingresá de nuevo.';
+}
 
 export class ErrorApi extends Error {
   constructor(mensaje, codigo, estado) {

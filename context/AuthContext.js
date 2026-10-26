@@ -4,6 +4,7 @@
 // Este contexto administra la sesión: guardarla, restaurarla y borrarla. Los
 // pedidos al backend viven en services/authService.js.
 import { createContext, useEffect, useState } from 'react';
+import { registrarCierreDeSesion } from '../services/apiClient';
 import { obtenerPerfil } from '../services/authService';
 import {
   borrarToken,
@@ -23,9 +24,28 @@ export function AuthProvider({ children }) {
   // entrar al home.
   const [cargando, setCargando] = useState(true);
 
+  // Por qué se cerró la sesión, para poder decírselo en el login. Si la
+  // persona no sabe por qué la sacaron, lo único que puede pensar es que la
+  // app se rompió.
+  const [motivoCierre, setMotivoCierre] = useState(null);
+
   useEffect(() => {
     restaurarSesion();
     // Solo al arrancar la app.
+  }, []);
+
+  // Cualquier 401 con token cierra la sesión, venga de donde venga.
+  //
+  // Antes esto se chequeaba solo al arrancar, en restaurarSesion(). Si el
+  // token dejaba de valer DESPUÉS, con la app abierta, cada pantalla mostraba
+  // su error ("Token inválido") y la persona quedaba adentro de una app que
+  // no podía hacer nada, sin entender por qué.
+  useEffect(() => {
+    registrarCierreDeSesion(async (motivo) => {
+      await limpiar();
+      setMotivoCierre(motivo);
+    });
+    return () => registrarCierreDeSesion(null);
   }, []);
 
   async function restaurarSesion() {
@@ -71,6 +91,7 @@ export function AuthProvider({ children }) {
 
   // La llaman el login y el registro cuando el backend devolvió token + usuario.
   const iniciarSesion = async (token, datosUsuario) => {
+    setMotivoCierre(null);
     await guardarToken(token);
     await guardarUsuario(datosUsuario);
     setUsuario(datosUsuario);
@@ -86,7 +107,14 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ usuario, cargando, iniciarSesion, actualizarUsuario, cerrarSesion }}
+      value={{
+        usuario,
+        cargando,
+        motivoCierre,
+        iniciarSesion,
+        actualizarUsuario,
+        cerrarSesion,
+      }}
     >
       {children}
     </AuthContext.Provider>
