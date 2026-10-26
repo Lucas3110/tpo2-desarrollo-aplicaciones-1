@@ -99,7 +99,7 @@ export default function VerificarCodigoScreen({ navigation, route }) {
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
         <Text style={styles.titulo}>Confirmá tu email</Text>
         <Text style={styles.bajada}>
-          Te mandamos un código de {LIMITES.LARGO_CODIGO} números a {email}
+          Te mandamos un código de {LIMITES.LARGO_CODIGO} números al email que pusiste.
         </Text>
 
         <Aviso mensaje={errorPedido} />
