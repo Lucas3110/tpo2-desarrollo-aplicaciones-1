@@ -62,12 +62,16 @@ export default function RecuperarPasswordScreen({ navigation }) {
     setTrabajando(true);
     try {
       await recuperarPassword(emailLimpio);
-      setAviso(
-        esReenvio
-          ? 'Te mandamos un código nuevo.'
-          : 'Si ese email tiene cuenta, te va a llegar un código.'
-      );
-      if (esReenvio) setCodigo('');
+      // Solo el reenvío avisa. En el primer envío la pantalla cambia de paso
+      // y la bajada ya dice "escribí el código que te llegó a tal mail", así
+      // que un cartel arriba repitiendo lo mismo es ruido.
+      //
+      // El reenvío sí lo necesita: ahí la pantalla no cambia, y sin el cartel
+      // tocar "Reenviar" no se nota.
+      if (esReenvio) {
+        setAviso('Te mandamos un código nuevo.');
+        setCodigo('');
+      }
       setPaso('codigo');
     } catch (e) {
       setErrorPedido(e.message);
