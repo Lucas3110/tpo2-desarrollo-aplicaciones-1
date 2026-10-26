@@ -219,7 +219,11 @@ export default function ResultadosScreen({ navigation, route }) {
         ListFooterComponent={
           cargandoMas ? (
             <ActivityIndicator style={styles.pie} color={colors.primary} />
-          ) : paginado && !paginado.hayMas && publicaciones.length > 0 && !recargando ? (
+          ) : paginado && !paginado.hayMas && publicaciones.length > LIMITE && !recargando ? (
+            // Sólo si hubo más de una página. "No hay más resultados" debajo de
+            // un único resultado no informa nada: ya se ve que no hay más. El
+            // cartel sirve cuando venís scrolleando y querés saber si llegaste
+            // al final o todavía falta cargar.
             <Text style={styles.pieTexto}>No hay más resultados</Text>
           ) : null
         }

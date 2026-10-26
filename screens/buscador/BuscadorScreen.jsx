@@ -37,7 +37,7 @@ import {
   leerBusquedas,
 } from '../../services/historialBusquedasService';
 import { obtenerBarrios, obtenerCategorias } from '../../services/publicacionService';
-import { formatearCoordenadas, ubicacionActual } from '../../services/ubicacionService';
+import { ubicacionActual } from '../../services/ubicacionService';
 import { hoyIso, isoATexto, isoDeHace, textoAIso } from '../../utils/fechas';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
@@ -301,7 +301,7 @@ export default function BuscadorScreen({ navigation }) {
 
             <Text style={styles.nota}>
               {coordenadas
-                ? `Vamos a ordenar por cercanía desde ${formatearCoordenadas(coordenadas)}`
+                ? 'Listo: vamos a ordenar los resultados por cercanía desde donde estás.'
                 : 'Si compartís tu ubicación, ordenamos los resultados por cercanía.'}
             </Text>
           </>
