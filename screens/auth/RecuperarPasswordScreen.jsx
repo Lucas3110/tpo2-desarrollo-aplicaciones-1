@@ -117,7 +117,7 @@ export default function RecuperarPasswordScreen({ navigation }) {
         <Text style={styles.bajada}>
           {paso === 'email'
             ? 'Te mandamos un código al email de tu cuenta.'
-            : `Escribí el código que te llegó a ${email.trim().toLowerCase()} y elegí una contraseña nueva.`}
+            : 'Escribí el código que te llegó al email de tu cuenta y elegí una contraseña nueva.'}
         </Text>
 
         <Aviso mensaje={errorPedido} />
@@ -176,7 +176,7 @@ export default function RecuperarPasswordScreen({ navigation }) {
             />
 
             <CampoTexto
-              etiqueta="Repetila"
+              etiqueta="Repetí la contraseña"
               value={repeticion}
               onChangeText={setRepeticion}
               error={errores.repeticion}
