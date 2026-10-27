@@ -14,7 +14,6 @@ import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   RefreshControl,
   ScrollView,
@@ -25,7 +24,8 @@ import {
 } from 'react-native';
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
-import { obtenerPublicacion, urlDeFoto } from '../../services/publicacionService';
+import GaleriaFotos from '../../components/GaleriaFotos';
+import { obtenerPublicacion } from '../../services/publicacionService';
 import { formatearCoordenadas } from '../../services/ubicacionService';
 import { describirFecha, mesYAnio } from '../../utils/fechas';
 import { describirEstado, describirFranja, describirTipo } from '../../utils/publicaciones';
@@ -104,7 +104,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
         />
       }
     >
-      <Galeria fotos={publicacion.fotos} />
+      <GaleriaFotos fotos={publicacion.fotos} />
 
       <View style={styles.cuerpo}>
         {error ? <Aviso mensaje={error} /> : null}
@@ -177,48 +177,6 @@ export default function DetallePublicacionScreen({ navigation, route }) {
 
 // ---------------------------------------------------------------
 
-const ANCHO = Dimensions.get('window').width;
-
-// "Galería con todas las fotos": se pasan de a una, deslizando. El contador
-// dice en cuál se está y cuántas hay, que es lo que le falta a un carrusel
-// para que se entienda que hay más.
-function Galeria({ fotos }) {
-  const [actual, setActual] = useState(0);
-
-  if (fotos.length === 0) {
-    return (
-      <View style={[styles.galeria, styles.sinFotos]}>
-        <Text style={styles.sinFotosTexto}>Sin fotos</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.galeria}>
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={(e) =>
-          setActual(Math.round(e.nativeEvent.contentOffset.x / ANCHO))
-        }
-      >
-        {fotos.map((foto) => (
-          <Image key={foto.id} source={{ uri: urlDeFoto(foto.url) }} style={styles.foto} />
-        ))}
-      </ScrollView>
-
-      {fotos.length > 1 ? (
-        <View style={styles.contador}>
-          <Text style={styles.contadorTexto}>
-            {actual + 1} / {fotos.length}
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 function Seccion({ titulo, children }) {
   return (
     <View style={styles.seccion}>
@@ -289,37 +247,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.background,
     padding: spacing.xl,
-  },
-  galeria: {
-    width: ANCHO,
-    height: ANCHO * 0.75,
-    backgroundColor: colors.border,
-  },
-  foto: {
-    width: ANCHO,
-    height: ANCHO * 0.75,
-  },
-  sinFotos: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sinFotosTexto: {
-    color: colors.textSecondary,
-    fontSize: fontSizes.sm,
-  },
-  contador: {
-    position: 'absolute',
-    right: spacing.md,
-    bottom: spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 2,
-  },
-  contadorTexto: {
-    color: colors.white,
-    fontSize: fontSizes.xs,
-    fontWeight: 'bold',
   },
   cuerpo: {
     padding: spacing.lg,
