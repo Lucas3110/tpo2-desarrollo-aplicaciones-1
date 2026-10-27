@@ -35,3 +35,18 @@ export async function obtenerReclamo(id) {
   const { data } = await apiClient.get(`/hallado/reclamos/${id}`);
   return data.reclamo;
 }
+
+// POST /hallado/reclamos/:id/aceptar
+//
+// Sólo el publicador. Deja la publicación RESUELTA, rechaza solos los
+// demás pendientes y le muestra la dirección exacta a quien reclamó.
+export async function aceptarReclamo(id) {
+  const { data } = await apiClient.post(`/hallado/reclamos/${id}/aceptar`);
+  return data.reclamo;
+}
+
+// POST /hallado/reclamos/:id/rechazar   { motivo? }
+export async function rechazarReclamo(id, motivo) {
+  const { data } = await apiClient.post(`/hallado/reclamos/${id}/rechazar`, motivo ? { motivo } : {});
+  return data.reclamo;
+}
