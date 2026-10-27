@@ -207,6 +207,14 @@ export default function HistorialScreen({ navigation }) {
           <TarjetaCaso
             caso={item}
             onPress={() => navigation.navigate('DetallePublicacion', { id: item.publicacion.id })}
+            onValorar={() =>
+              navigation.navigate('Valorar', {
+                casoId: item.id,
+                contraparte: item.contraparte,
+                titulo: item.publicacion.titulo,
+                puedoAgradecer: item.valoracion.puedoAgradecer,
+              })
+            }
           />
         )}
       />
@@ -230,8 +238,9 @@ function Solapa({ titulo, cantidad, activa, onPress }) {
   );
 }
 
-// "Con fecha, objeto y contraparte", más cómo quedó la valoración.
-function TarjetaCaso({ caso, onPress }) {
+// "Con fecha, objeto y contraparte", más cómo quedó la valoración y, si
+// todavía se está a tiempo, el botón para dejarla.
+function TarjetaCaso({ caso, onPress, onValorar }) {
   const { publicacion, contraparte, valoracion } = caso;
 
   return (
@@ -273,6 +282,12 @@ function TarjetaCaso({ caso, onPress }) {
         </Text>
         {valoracion.recibida?.agradecimiento ? (
           <Text style={styles.agradecimiento}>"{valoracion.recibida.agradecimiento}"</Text>
+        ) : null}
+
+        {valoracion.puedoValorar ? (
+          <TouchableOpacity style={styles.valorar} onPress={onValorar} activeOpacity={0.7}>
+            <Text style={styles.valorarTexto}>Valorar a {contraparte.nombre}</Text>
+          </TouchableOpacity>
         ) : null}
       </View>
     </TouchableOpacity>
@@ -395,6 +410,19 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontStyle: 'italic',
     marginTop: spacing.xs,
+  },
+  valorar: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignItems: 'center',
+  },
+  valorarTexto: {
+    color: colors.primary,
+    fontSize: fontSizes.sm,
+    fontWeight: 'bold',
   },
   vacio: {
     flex: 1,

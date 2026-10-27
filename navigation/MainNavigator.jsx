@@ -17,6 +17,7 @@ import ReclamarScreen from '../screens/reclamos/ReclamarScreen';
 import MisReclamosScreen from '../screens/reclamos/MisReclamosScreen';
 import DetalleReclamoScreen from '../screens/reclamos/DetalleReclamoScreen';
 import HistorialScreen from '../screens/historial/HistorialScreen';
+import ValorarScreen from '../screens/historial/ValorarScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -77,6 +78,7 @@ export default function MainNavigator() {
 
       {/* Punto 10 - historial y valoraciones */}
       <Stack.Screen name="Historial" component={HistorialScreen} options={{ title: 'Historial' }} />
+      <Stack.Screen name="Valorar" component={ValorarScreen} options={{ title: 'Valorar' }} />
     </Stack.Navigator>
   );
 }
