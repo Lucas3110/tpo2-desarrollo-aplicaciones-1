@@ -43,6 +43,17 @@ export function urlDeFoto(url) {
   return BASE_URL.replace(/\/api\/?$/, '') + url;
 }
 
+// GET /hallado/publicaciones/:id
+//
+// El detalle del punto 4. Devuelve { publicacion, acciones }. Las acciones
+// (si soy el publicador, si puedo reclamar y qué dice el botón) las decide el
+// backend según quién pide: la app las muestra, no las calcula. Y la
+// dirección exacta viene en null si no corresponde verla.
+export async function obtenerPublicacion(id) {
+  const { data } = await apiClient.get(`/hallado/publicaciones/${id}`);
+  return data;
+}
+
 // GET /hallado/publicaciones/mias
 //
 // Devuelve { publicaciones, resumen }. El resumen cuenta SIEMPRE el total,

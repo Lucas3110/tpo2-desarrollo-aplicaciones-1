@@ -73,3 +73,18 @@ export const ATAJOS_FECHA = [
   { etiqueta: 'Hace 3 días', dias: 3 },
   { etiqueta: 'Hace una semana', dias: 7 },
 ];
+
+// "Miembro desde octubre de 2026". Para una fecha-hora ISO del backend. Se
+// arma a mano y no con toLocaleDateString: en algunos Android el motor no
+// trae los nombres de los meses en castellano y devuelve los números.
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+
+export function mesYAnio(isoFechaHora) {
+  if (!isoFechaHora) return '';
+  const fecha = new Date(isoFechaHora);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return `${MESES[fecha.getMonth()]} de ${fecha.getFullYear()}`;
+}

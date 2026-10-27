@@ -12,6 +12,7 @@ import PublicarScreen from '../screens/publicar/PublicarScreen';
 import MisPublicacionesScreen from '../screens/publicar/MisPublicacionesScreen';
 import MenuScreen from '../screens/menu/MenuScreen';
 import ResultadosScreen from '../screens/buscador/ResultadosScreen';
+import DetallePublicacionScreen from '../screens/detalle/DetallePublicacionScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -47,7 +48,7 @@ export default function MainNavigator() {
       <Stack.Screen name="Resultados" component={ResultadosScreen} options={{ title: 'Resultados' }} />
 
       {/* Punto 4 - detalle */}
-      <Stack.Screen name="DetallePublicacion" component={pantallaPendiente('Detalle', 4)} options={{ title: 'Publicacion' }} />
+      <Stack.Screen name="DetallePublicacion" component={DetallePublicacionScreen} options={{ title: 'Publicación' }} />
 
       {/* Punto 5 - publicar */}
       <Stack.Screen name="Publicar" component={PublicarScreen} options={{ title: 'Publicar' }} />
