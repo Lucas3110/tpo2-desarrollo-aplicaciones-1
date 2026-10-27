@@ -23,3 +23,13 @@ export async function obtenerHistorial({ tipo, desde, hasta } = {}) {
   });
   return data;
 }
+
+// POST /hallado/reclamos/:id/valoracion   { tipo, mensaje?, agradecimiento? }
+//
+// Una sola vez por caso y dentro de los 7 días de la devolución; si no, el
+// backend contesta YA_VALORASTE o PLAZO_VENCIDO. El agradecimiento sólo lo
+// acepta si quien valora es quien recuperó su objeto.
+export async function valorarCaso(reclamoId, datos) {
+  const { data } = await apiClient.post(`/hallado/reclamos/${reclamoId}/valoracion`, datos);
+  return data.valoracion;
+}
