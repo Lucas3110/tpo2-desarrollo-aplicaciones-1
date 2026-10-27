@@ -141,7 +141,7 @@ export default function MisReclamosScreen({ navigation }) {
         renderItem={({ item }) => (
           <TarjetaReclamo
             reclamo={item}
-            onPress={() => navigation.navigate('DetallePublicacion', { id: item.publicacion.id })}
+            onPress={() => navigation.navigate('DetalleReclamo', { id: item.id })}
           />
         )}
       />
