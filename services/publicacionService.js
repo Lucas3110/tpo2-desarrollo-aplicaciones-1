@@ -54,6 +54,21 @@ export async function obtenerPublicacion(id) {
   return data;
 }
 
+// POST / DELETE /hallado/publicaciones/:id/seguir
+//
+// "Cualquier persona puede seguir la publicación para enterarse de sus
+// novedades." Las dos devuelven { laSigo, seguidores } y son idempotentes:
+// un reintento no da error.
+export async function seguirPublicacion(id) {
+  const { data } = await apiClient.post(`/hallado/publicaciones/${id}/seguir`);
+  return data;
+}
+
+export async function dejarDeSeguirPublicacion(id) {
+  const { data } = await apiClient.delete(`/hallado/publicaciones/${id}/seguir`);
+  return data;
+}
+
 // GET /hallado/publicaciones/mias
 //
 // Devuelve { publicaciones, resumen }. El resumen cuenta SIEMPRE el total,
