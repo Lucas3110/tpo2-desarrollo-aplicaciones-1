@@ -18,3 +18,20 @@ export async function crearReclamo(publicacionId, datos) {
   const { data } = await apiClient.post(`/hallado/publicaciones/${publicacionId}/reclamos`, datos);
   return data.reclamo;
 }
+
+// GET /hallado/reclamos/mios
+//
+// Devuelve { enviados, recibidos, resumen }. Los pendientes vienen primero
+// y el backend ya aplicó los vencimientos. El resumen cuenta cuántos esperan
+// respuesta de cada lado, para las solapas.
+export async function misReclamos() {
+  const { data } = await apiClient.get('/hallado/reclamos/mios');
+  return data;
+}
+
+// GET /hallado/reclamos/:id
+// Sólo lo ven las dos partes del reclamo.
+export async function obtenerReclamo(id) {
+  const { data } = await apiClient.get(`/hallado/reclamos/${id}`);
+  return data.reclamo;
+}

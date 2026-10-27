@@ -14,6 +14,7 @@ import MenuScreen from '../screens/menu/MenuScreen';
 import ResultadosScreen from '../screens/buscador/ResultadosScreen';
 import DetallePublicacionScreen from '../screens/detalle/DetallePublicacionScreen';
 import ReclamarScreen from '../screens/reclamos/ReclamarScreen';
+import MisReclamosScreen from '../screens/reclamos/MisReclamosScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -62,7 +63,7 @@ export default function MainNavigator() {
 
       {/* Punto 7 - reclamos */}
       <Stack.Screen name="Reclamar" component={ReclamarScreen} options={{ title: 'Reclamo' }} />
-      <Stack.Screen name="MisReclamos" component={pantallaPendiente('Mis reclamos', 7)} options={{ title: 'Mis reclamos' }} />
+      <Stack.Screen name="MisReclamos" component={MisReclamosScreen} options={{ title: 'Mis reclamos' }} />
 
       {/* Punto 8 - devolucion y punto de encuentro */}
       <Stack.Screen name="PuntoDeEncuentro" component={pantallaPendiente('Punto de encuentro', 8)} options={{ title: 'Punto de encuentro' }} />
