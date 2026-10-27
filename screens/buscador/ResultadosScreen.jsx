@@ -39,9 +39,14 @@ const CUANDO = [
 const LIMITE = 10;
 
 export default function ResultadosScreen({ navigation, route }) {
-  const { criterios: criteriosIniciales, etiquetas } = route.params;
+  const { criterios: criteriosIniciales, etiquetas: etiquetasIniciales } = route.params;
 
   const [criterios, setCriterios] = useState(criteriosIniciales);
+  // Los nombres que se muestran en el resumen de arriba. Arrancan con lo que
+  // se eligió en el buscador y se recalculan al ajustar desde acá: si no,
+  // después de "Limpiar filtros" el encabezado seguía diciendo "Documentos ·
+  // Avellaneda" sobre una lista que ya traía todo.
+  const [etiquetas, setEtiquetas] = useState(etiquetasIniciales);
   // null = todavia no cargo nunca. [] = cargo y no hay resultados. Son dos
   // cosas distintas: la primera merece el spinner de pantalla completa, la
   // segunda el estado "sin resultados".
@@ -106,6 +111,10 @@ export default function ResultadosScreen({ navigation, route }) {
   function aplicarFiltros(nuevos) {
     setPanelAbierto(false);
     setCriterios({ ...criterios, ...nuevos });
+    setEtiquetas({
+      categoria: nombreDe(categorias, nuevos.categoriaId, etiquetas?.categoria),
+      barrio: nombreDe(barrios, nuevos.barrioId, etiquetas?.barrio),
+    });
   }
 
   function cambiarOrden(orden) {
@@ -257,6 +266,14 @@ export default function ResultadosScreen({ navigation, route }) {
 }
 
 // ---------------------------------------------------------------
+
+// El nombre de una opción elegida, para el resumen. Si el catálogo no cargó
+// (el panel quedó sin listas pero los resultados se ven igual) se conserva
+// el nombre que ya se tenía antes que mostrar nada.
+function nombreDe(opciones, id, anterior) {
+  if (id === null || id === undefined) return null;
+  return opciones.find((o) => o.id === id)?.nombre ?? anterior ?? null;
+}
 
 function Resumen({ criterios, etiquetas, total }) {
   // Se arma con lo que la persona eligió, no con los códigos internos.
