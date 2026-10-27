@@ -14,6 +14,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -25,7 +26,13 @@ import {
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
 import GaleriaFotos from '../../components/GaleriaFotos';
-import { obtenerPublicacion } from '../../services/publicacionService';
+import {
+  dejarDeSeguirPublicacion,
+  eliminarPublicacion,
+  obtenerPublicacion,
+  renovarPublicacion,
+  seguirPublicacion,
+} from '../../services/publicacionService';
 import { formatearCoordenadas } from '../../services/ubicacionService';
 import { describirFecha, mesYAnio } from '../../utils/fechas';
 import { describirEstado, describirFranja, describirTipo } from '../../utils/publicaciones';
@@ -39,6 +46,10 @@ export default function DetallePublicacionScreen({ navigation, route }) {
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [error, setError] = useState(null);
+
+  // Qué acción está en curso (seguir, renovar, eliminar), para el spinner
+  // del botón y para que no se pueda tocar dos veces.
+  const [accionEnCurso, setAccionEnCurso] = useState(null);
 
   // Si ya hubo una carga buena, las siguientes no tapan la pantalla con el
   // spinner: lo que ya estaba sigue a la vista mientras llega lo nuevo.
@@ -67,6 +78,70 @@ export default function DetallePublicacionScreen({ navigation, route }) {
       cargar();
     }, [id])
   );
+
+  // Seguir / dejar de seguir. El backend contesta { laSigo, seguidores } y
+  // con eso se actualiza el detalle sin volver a pedirlo entero.
+  async function alternarSeguir() {
+    const { publicacion } = detalle;
+    setAccionEnCurso('seguir');
+    setError(null);
+    try {
+      const respuesta = publicacion.laSigo
+        ? await dejarDeSeguirPublicacion(id)
+        : await seguirPublicacion(id);
+      setDetalle({ ...detalle, publicacion: { ...publicacion, ...respuesta } });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAccionEnCurso(null);
+    }
+  }
+
+  // "Si es el propio publicador, accede a la gestión de su publicación."
+  async function renovar() {
+    setAccionEnCurso('renovar');
+    setError(null);
+    try {
+      await renovarPublicacion(id);
+      await cargar({ esRefresco: true });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAccionEnCurso(null);
+    }
+  }
+
+  function confirmarEliminar() {
+    // Es la única acción de la pantalla que no se puede deshacer: se
+    // pregunta antes.
+    Alert.alert('Eliminar publicación', '¿Seguro? Esto no se puede deshacer.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: eliminar },
+    ]);
+  }
+
+  async function eliminar() {
+    setAccionEnCurso('eliminar');
+    setError(null);
+    try {
+      await eliminarPublicacion(id);
+      navigation.goBack();
+    } catch (e) {
+      // Por ejemplo, PUBLICACION_EN_RECLAMO: hay alguien esperando respuesta.
+      setError(e.message);
+      setAccionEnCurso(null);
+    }
+  }
+
+  function irAReclamar() {
+    const { publicacion, acciones } = detalle;
+    navigation.navigate('Reclamar', {
+      publicacionId: publicacion.id,
+      tipo: acciones.reclamo,
+      titulo: publicacion.titulo,
+      pregunta: publicacion.preguntaVerificacion,
+    });
+  }
 
   if (cargando && detalle === null) {
     return (
@@ -127,6 +202,26 @@ export default function DetallePublicacionScreen({ navigation, route }) {
           {franja ? `, ${franja}` : ''}
         </Text>
 
+        {/* "Acciones disponibles según quién esté mirando." Cuáles hay lo
+            dijo el backend; acá sólo se pintan. */}
+        {acciones.esPublicador ? (
+          <Gestion
+            publicacion={publicacion}
+            accionEnCurso={accionEnCurso}
+            onRenovar={renovar}
+            onEliminar={confirmarEliminar}
+            onVerReclamos={() => navigation.navigate('MisReclamos')}
+          />
+        ) : (
+          <AccionesDeTercero
+            publicacion={publicacion}
+            acciones={acciones}
+            accionEnCurso={accionEnCurso}
+            onReclamar={irAReclamar}
+            onSeguir={alternarSeguir}
+          />
+        )}
+
         <Seccion titulo="Descripción">
           <Text style={publicacion.descripcion ? styles.texto : styles.textoVacio}>
             {publicacion.descripcion ?? 'Sin descripción.'}
@@ -176,6 +271,115 @@ export default function DetallePublicacionScreen({ navigation, route }) {
 }
 
 // ---------------------------------------------------------------
+
+// Lo que puede hacer alguien que no publicó: reclamar y seguir.
+//
+// El botón de reclamar dice "Es mío" en algo encontrado y "Lo encontré" en
+// algo perdido. Cuando no se puede reclamar, el botón queda atenuado y
+// abajo se explica por qué: un botón gris sin explicación parece roto.
+function AccionesDeTercero({ publicacion, acciones, accionEnCurso, onReclamar, onSeguir }) {
+  const etiqueta = acciones.reclamo === 'ES_MIO' ? 'Es mío' : 'Lo encontré';
+
+  return (
+    <View style={styles.acciones}>
+      <Boton titulo={etiqueta} onPress={onReclamar} deshabilitado={!acciones.puedeReclamar} />
+      <Text style={styles.nota}>{explicarReclamo(publicacion, acciones)}</Text>
+
+      {acciones.puedeSeguir ? (
+        <View style={styles.seguir}>
+          <Boton
+            titulo={publicacion.laSigo ? 'Dejar de seguir' : 'Seguir esta publicación'}
+            onPress={onSeguir}
+            cargando={accionEnCurso === 'seguir'}
+            deshabilitado={accionEnCurso !== null}
+            variante="secundario"
+          />
+          <Text style={styles.nota}>
+            {publicacion.laSigo
+              ? 'La seguís: te vas a enterar cuando cambie de estado.'
+              : publicacion.seguidores > 0
+                ? `${plural(publicacion.seguidores, 'persona la sigue', 'personas la siguen')}.`
+                : 'Seguila para enterarte cuando cambie de estado.'}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// Por qué se puede o no reclamar, en una línea.
+function explicarReclamo(publicacion, acciones) {
+  const { miReclamo, intentosRestantes, estado } = publicacion;
+
+  if (miReclamo?.estado === 'PENDIENTE') {
+    return 'Ya enviaste un reclamo. Está esperando la respuesta del publicador.';
+  }
+  if (miReclamo?.estado === 'ACEPTADO') {
+    return 'Tu reclamo fue aceptado. Ya podés ver la dirección exacta más abajo.';
+  }
+  if (estado === 'RESUELTA') return 'Esta publicación ya se resolvió.';
+  if (estado === 'VENCIDA') return 'Esta publicación venció.';
+  if (intentosRestantes === 0) return 'Ya usaste los 3 intentos para esta publicación.';
+
+  const base = acciones.reclamo === 'ES_MIO'
+    ? 'Si es tuyo, vas a tener que responder la pregunta de verificación.'
+    : 'Si lo encontraste, vas a tener que adjuntar una foto y el barrio.';
+
+  if (miReclamo?.estado === 'RECHAZADO' || miReclamo?.estado === 'VENCIDO') {
+    return `${base} Te ${intentosRestantes === 1 ? 'queda 1 intento' : `quedan ${intentosRestantes} intentos`}.`;
+  }
+  return base;
+}
+
+// Lo que puede hacer el publicador con lo suyo.
+function Gestion({ publicacion, accionEnCurso, onRenovar, onEliminar, onVerReclamos }) {
+  const { reclamosPendientes, estado, venceEn } = publicacion;
+
+  return (
+    <View style={styles.gestion}>
+      <Text style={styles.seccionTitulo}>Tu publicación</Text>
+
+      {reclamosPendientes > 0 ? (
+        <TouchableOpacity style={styles.pendientes} onPress={onVerReclamos} activeOpacity={0.7}>
+          <Text style={styles.pendientesTexto}>
+            {plural(reclamosPendientes, 'reclamo espera', 'reclamos esperan')} tu respuesta
+          </Text>
+          <Text style={styles.enlace}>Ver reclamos</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.nota}>
+          {estado === 'RESUELTA'
+            ? 'Resuelta: el objeto ya volvió con su dueño.'
+            : estado === 'VENCIDA'
+              ? 'Venció. Si todavía corresponde, renovala por 30 días más.'
+              : `Vence el ${describirFecha(String(venceEn).slice(0, 10))}. Todavía nadie la reclamó.`}
+        </Text>
+      )}
+
+      <View style={styles.gestionBotones}>
+        {estado !== 'RESUELTA' ? (
+          <Boton
+            titulo="Renovar por 30 días"
+            onPress={onRenovar}
+            cargando={accionEnCurso === 'renovar'}
+            deshabilitado={accionEnCurso !== null}
+            variante="secundario"
+          />
+        ) : null}
+        <TouchableOpacity
+          style={styles.eliminar}
+          onPress={onEliminar}
+          disabled={accionEnCurso !== null}
+          hitSlop={8}
+        >
+          <Text style={styles.eliminarTexto}>
+            {accionEnCurso === 'eliminar' ? 'Eliminando…' : 'Eliminar publicación'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
 function Seccion({ titulo, children }) {
   return (
@@ -287,6 +491,46 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.text,
     marginTop: spacing.xs,
+  },
+  acciones: {
+    marginTop: spacing.lg,
+  },
+  seguir: {
+    marginTop: spacing.md,
+  },
+  gestion: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+  },
+  pendientes: {
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+  },
+  pendientesTexto: {
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    fontWeight: 'bold',
+    marginBottom: spacing.xs,
+  },
+  gestionBotones: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  eliminar: {
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  eliminarTexto: {
+    color: colors.danger,
+    fontSize: fontSizes.sm,
+    fontWeight: 'bold',
   },
   seccion: {
     marginTop: spacing.lg,

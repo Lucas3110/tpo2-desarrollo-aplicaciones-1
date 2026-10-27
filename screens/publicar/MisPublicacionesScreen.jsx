@@ -157,7 +157,11 @@ export default function MisPublicacionesScreen({ navigation }) {
         renderItem={({ item }) => {
           const estado = ESTADOS[item.estado] ?? { texto: item.estado, color: colors.textSecondary };
           return (
-            <View style={styles.tarjeta}>
+            <TouchableOpacity
+              style={styles.tarjeta}
+              onPress={() => navigation.navigate('DetallePublicacion', { id: item.id })}
+              activeOpacity={0.8}
+            >
               <View style={styles.fila}>
                 {item.portada ? (
                   <Image source={{ uri: urlDeFoto(item.portada) }} style={styles.miniatura} />
@@ -205,7 +209,7 @@ export default function MisPublicacionesScreen({ navigation }) {
                   </Text>
                 </TouchableOpacity>
               ) : null}
-            </View>
+            </TouchableOpacity>
           );
         }}
       />
