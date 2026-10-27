@@ -16,6 +16,7 @@ import DetallePublicacionScreen from '../screens/detalle/DetallePublicacionScree
 import ReclamarScreen from '../screens/reclamos/ReclamarScreen';
 import MisReclamosScreen from '../screens/reclamos/MisReclamosScreen';
 import DetalleReclamoScreen from '../screens/reclamos/DetalleReclamoScreen';
+import HistorialScreen from '../screens/historial/HistorialScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -75,7 +76,7 @@ export default function MainNavigator() {
       <Stack.Screen name="Seguidas" component={pantallaPendiente('Seguidas', 9)} options={{ title: 'Seguidas' }} />
 
       {/* Punto 10 - historial y valoraciones */}
-      <Stack.Screen name="Historial" component={pantallaPendiente('Historial', 10)} options={{ title: 'Historial' }} />
+      <Stack.Screen name="Historial" component={HistorialScreen} options={{ title: 'Historial' }} />
     </Stack.Navigator>
   );
 }
