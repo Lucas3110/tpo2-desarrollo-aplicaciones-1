@@ -9,9 +9,11 @@
 // Abrir la alerta es ver sus novedades, así que al salir de la pantalla lo
 // publicado hasta ahora deja de contar como nuevo. Se marca al salir y no
 // al entrar: si se marcara al entrar, la página 2 llegaría ya marcada.
+// Mientras tanto, las nuevas quedan marcadas en la lista.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Aviso from '../../components/Aviso';
+import IndicadorNovedad from '../../components/IndicadorNovedad';
 import TarjetaResultado from '../../components/TarjetaResultado';
 import { marcarAlertaVista, publicacionesDeAlerta } from '../../services/alertaService';
 import { describirAlerta } from '../../utils/publicaciones';
@@ -89,6 +91,9 @@ export default function AlertaResultadosScreen({ navigation, route }) {
           {paginado.total === 0
             ? 'Sin resultados'
             : `${paginado.total} ${paginado.total === 1 ? 'resultado' : 'resultados'}`}
+          {alerta.nuevas > 0
+            ? ` · ${alerta.nuevas} ${alerta.nuevas === 1 ? 'nueva' : 'nuevas'}`
+            : ''}
         </Text>
       </View>
 
@@ -138,6 +143,15 @@ export default function AlertaResultadosScreen({ navigation, route }) {
           <TarjetaResultado
             publicacion={item}
             onPress={() => navigation.navigate('DetallePublicacion', { id: item.id })}
+            destacada={item.esNueva}
+            pie={
+              item.esNueva ? (
+                <View style={styles.nueva}>
+                  <IndicadorNovedad />
+                  <Text style={styles.nuevaTexto}>Nueva desde la última vez</Text>
+                </View>
+              ) : null
+            }
           />
         )}
       />
@@ -181,6 +195,17 @@ const styles = StyleSheet.create({
   },
   pie: {
     marginVertical: spacing.lg,
+  },
+  nueva: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  nuevaTexto: {
+    fontSize: fontSizes.xs,
+    color: colors.danger,
+    fontWeight: 'bold',
   },
   vacio: {
     flex: 1,

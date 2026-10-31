@@ -4,6 +4,9 @@
 //
 // Se vuelve a pedir cada vez que la pantalla toma foco: al volver de mirar
 // lo que encontró una alerta, su contador ya tiene que haber bajado a cero.
+//
+// Las que tienen algo nuevo llevan el indicador de novedad y quedan
+// marcadas, para que se encuentren sin leer tarjeta por tarjeta.
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -18,6 +21,7 @@ import {
 } from 'react-native';
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
+import IndicadorNovedad from '../../components/IndicadorNovedad';
 import { cambiarEstadoAlerta, eliminarAlerta, misAlertas } from '../../services/alertaService';
 import { describirAlerta } from '../../utils/publicaciones';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
@@ -165,10 +169,21 @@ export default function MisAlertasScreen({ navigation }) {
 
 function TarjetaAlerta({ alerta, enCurso, onPress, onPausar, onEliminar }) {
   return (
-    <View style={[styles.tarjeta, !alerta.activa ? styles.tarjetaPausada : null]}>
+    <View
+      style={[
+        styles.tarjeta,
+        alerta.hayNovedad ? styles.tarjetaConNovedad : null,
+        !alerta.activa ? styles.tarjetaPausada : null,
+      ]}
+    >
       <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        <Text style={styles.titulo}>{describirAlerta(alerta)}</Text>
-        <Text style={styles.detalle}>{describirNuevas(alerta)}</Text>
+        <View style={styles.encabezado}>
+          <Text style={styles.titulo}>{describirAlerta(alerta)}</Text>
+          <IndicadorNovedad cantidad={alerta.nuevas} />
+        </View>
+        <Text style={[styles.detalle, alerta.hayNovedad ? styles.detalleConNovedad : null]}>
+          {describirNuevas(alerta)}
+        </Text>
       </TouchableOpacity>
 
       <View style={styles.acciones}>
@@ -223,11 +238,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     padding: spacing.md,
   },
+  tarjetaConNovedad: {
+    borderColor: colors.danger,
+    borderLeftWidth: 4,
+  },
   // Atenuada y no escondida: sigue siendo de la persona, sólo que callada.
   tarjetaPausada: {
     opacity: 0.6,
   },
+  encabezado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   titulo: {
+    flex: 1,
     fontSize: fontSizes.md,
     fontWeight: 'bold',
     color: colors.text,
@@ -236,6 +261,10 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
     marginTop: spacing.xs,
+  },
+  detalleConNovedad: {
+    color: colors.danger,
+    fontWeight: 'bold',
   },
   acciones: {
     flexDirection: 'row',

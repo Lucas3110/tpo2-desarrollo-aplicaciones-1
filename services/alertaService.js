@@ -78,3 +78,16 @@ export async function marcarAlertaVista(id) {
   const { data } = await apiClient.post(`/hallado/alertas/${id}/vista`);
   return data.alerta;
 }
+
+// GET /hallado/novedades
+//
+// El resumen para el indicador de novedad del menú: con un solo pedido se
+// sabe si prender el de "Mis alertas" y el de "Seguidas", sin traer las dos
+// listas enteras. Devuelve
+//   { alertas: { publicacionesNuevas, alertasConNovedad },
+//     seguidas: { conNovedad },
+//     hayNovedades }
+export async function obtenerNovedades() {
+  const { data } = await apiClient.get('/hallado/novedades');
+  return data;
+}

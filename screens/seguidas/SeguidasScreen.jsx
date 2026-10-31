@@ -3,6 +3,11 @@
 // Se siguen desde el detalle (punto 4). Esta lista se vuelve a pedir cada
 // vez que toma foco: si la persona dejó de seguir algo desde el detalle, al
 // volver ya no tiene que estar.
+//
+// Indicador de novedad: una seguida cambió de estado si el de ahora no es
+// el que la persona vio la última vez que la abrió. El backend ya las manda
+// primero. Abrir el detalle la marca como vista, así que al volver de ahí
+// el indicador ya se apagó.
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -15,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import Aviso from '../../components/Aviso';
+import IndicadorNovedad from '../../components/IndicadorNovedad';
 import TarjetaResultado from '../../components/TarjetaResultado';
 import { misSeguidas } from '../../services/publicacionService';
 import { describirEstado } from '../../utils/publicaciones';
@@ -104,6 +110,7 @@ export default function SeguidasScreen({ navigation }) {
           <TarjetaResultado
             publicacion={item}
             onPress={() => navigation.navigate('DetallePublicacion', { id: item.id })}
+            destacada={item.hayNovedad}
             pie={<Estado seguida={item} />}
           />
         )}
@@ -114,11 +121,23 @@ export default function SeguidasScreen({ navigation }) {
 
 // ---------------------------------------------------------------
 
+// El estado actual, y si cambió, desde cuál: "pasó de Abierta a Resuelta"
+// dice qué pasó; "Resuelta" sola obliga a acordarse de cómo estaba.
 function Estado({ seguida }) {
   const estado = describirEstado(seguida.estado);
   return (
-    <View style={[styles.chip, { backgroundColor: estado.color }]}>
-      <Text style={styles.chipTexto}>{estado.texto}</Text>
+    <View>
+      <View style={[styles.chip, { backgroundColor: estado.color }]}>
+        <Text style={styles.chipTexto}>{estado.texto}</Text>
+      </View>
+      {seguida.hayNovedad ? (
+        <View style={styles.novedad}>
+          <IndicadorNovedad />
+          <Text style={styles.novedadTexto}>
+            Pasó de {describirEstado(seguida.estadoVisto).texto} a {estado.texto}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -154,6 +173,18 @@ const styles = StyleSheet.create({
   chipTexto: {
     color: colors.white,
     fontSize: fontSizes.xs,
+    fontWeight: 'bold',
+  },
+  novedad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  novedadTexto: {
+    flex: 1,
+    fontSize: fontSizes.xs,
+    color: colors.danger,
     fontWeight: 'bold',
   },
   vacio: {

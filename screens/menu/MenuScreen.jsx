@@ -8,9 +8,17 @@
 // pestañas necesitan @react-navigation/bottom-tabs, una librería más que el
 // profe no dio, y para ocho secciones a las que se entra de vez en cuando
 // una lista alcanza.
+//
+// Punto 9: "Mis alertas" y "Seguidas" llevan el indicador de novedad. Se
+// pide cada vez que el menú toma foco, así al volver de mirar una alerta el
+// globo ya bajó.
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Boton from '../../components/Boton';
+import IndicadorNovedad from '../../components/IndicadorNovedad';
 import { useAuth } from '../../hooks/useAuth';
+import { obtenerNovedades } from '../../services/alertaService';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 const SECCIONES = [
@@ -46,6 +54,23 @@ const SECCIONES = [
 
 export default function MenuScreen({ navigation }) {
   const { usuario, cerrarSesion } = useAuth();
+  const [novedades, setNovedades] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      obtenerNovedades()
+        .then(setNovedades)
+        // Sin el resumen el menú funciona igual, sólo que sin los globos.
+        .catch(() => {});
+    }, [])
+  );
+
+  // Cuántas cosas nuevas hay detrás de cada sección. En las alertas se
+  // cuentan publicaciones, que es lo que la persona va a encontrar al entrar.
+  const pendientesPorRuta = {
+    MisAlertas: novedades?.alertas.publicacionesNuevas ?? 0,
+    Seguidas: novedades?.seguidas.conNovedad ?? 0,
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.contenido}>
@@ -71,6 +96,7 @@ export default function MenuScreen({ navigation }) {
                 activeOpacity={0.7}
               >
                 <Text style={styles.textoItem}>{etiqueta}</Text>
+                <IndicadorNovedad cantidad={pendientesPorRuta[ruta] ?? 0} />
               </TouchableOpacity>
             ))}
           </View>
@@ -130,6 +156,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
