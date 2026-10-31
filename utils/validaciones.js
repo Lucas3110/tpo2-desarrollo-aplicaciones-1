@@ -12,10 +12,13 @@ const NOMBRE_MAX = 30;
 const PASSWORD_MIN = 6;
 const PASSWORD_MAX = 40;
 const LARGO_CODIGO = 6;
+const TELEFONO_MAX = 30;
 
 // Letras (con acentos y ñ), espacios, apóstrofos y guiones. Arranca con letra.
 const FORMATO_NOMBRE = /^\p{L}[\p{L} '’-]*$/u;
 const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Dígitos, espacios, guiones, paréntesis y un + inicial opcional.
+const FORMATO_TELEFONO = /^\+?[\d\s()-]{6,}$/;
 
 export function validarEmail(email) {
   const valor = String(email ?? '').trim();
@@ -30,6 +33,15 @@ export function validarNombre(nombre) {
   if (valor.length > NOMBRE_MAX) return `Hasta ${NOMBRE_MAX} caracteres`;
   if (/\d/.test(valor)) return 'El nombre no puede tener números';
   if (!FORMATO_NOMBRE.test(valor)) return 'Solo letras, espacios, apóstrofos y guiones';
+  return null;
+}
+
+// El teléfono es opcional: vacío está bien.
+export function validarTelefono(telefono) {
+  const valor = String(telefono ?? '').trim();
+  if (valor === '') return null;
+  if (valor.length > TELEFONO_MAX) return `Hasta ${TELEFONO_MAX} caracteres`;
+  if (!FORMATO_TELEFONO.test(valor)) return 'Solo números, espacios, guiones y paréntesis';
   return null;
 }
 
@@ -66,4 +78,4 @@ export function validarFormulario(reglas) {
   return errores;
 }
 
-export const LIMITES = { NOMBRE_MAX, PASSWORD_MIN, PASSWORD_MAX, LARGO_CODIGO };
+export const LIMITES = { NOMBRE_MAX, PASSWORD_MIN, PASSWORD_MAX, LARGO_CODIGO, TELEFONO_MAX };

@@ -1,19 +1,14 @@
-// Punto 2: "Ver y editar los datos personales: nombre, foto de perfil, barrio
-// y teléfono de contacto."
+// Punto 2: el perfil propio.
 //
+// "Ver y editar los datos personales: nombre, foto de perfil, barrio y
+// teléfono de contacto." Los datos salen del AuthContext y no del backend,
+// así la pantalla tiene algo que mostrar desde el primer render, sin
+// spinner.
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Avatar from '../../components/Avatar';
+import Boton from '../../components/Boton';
 import { useAuth } from '../../hooks/useAuth';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
-
-// Las iniciales reemplazan a la foto mientras no haya una cargada.
-function iniciales(nombre) {
-  return String(nombre ?? '')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((parte) => parte[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 function Dato({ etiqueta, valor }) {
   return (
@@ -30,9 +25,7 @@ export default function PerfilScreen({ navigation }) {
   return (
     <ScrollView contentContainerStyle={styles.contenido}>
       <View style={styles.cabecera}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarTexto}>{iniciales(usuario?.nombre)}</Text>
-        </View>
+        <Avatar nombre={usuario?.nombre} fotoUrl={usuario?.fotoUrl} />
         <Text style={styles.nombre}>{usuario?.nombre}</Text>
         <Text style={styles.email}>{usuario?.email}</Text>
       </View>
@@ -42,6 +35,13 @@ export default function PerfilScreen({ navigation }) {
         <Dato etiqueta="Nombre" valor={usuario?.nombre} />
         <Dato etiqueta="Barrio" valor={usuario?.zona?.nombre} />
         <Dato etiqueta="Teléfono" valor={usuario?.telefono} />
+        <View style={styles.editar}>
+          <Boton
+            titulo="Editar mis datos"
+            onPress={() => navigation.navigate('EditarPerfil')}
+            variante="secundario"
+          />
+        </View>
       </View>
 
       <Text style={styles.seccion}>Privacidad</Text>
@@ -67,8 +67,6 @@ export default function PerfilScreen({ navigation }) {
   );
 }
 
-const TAMANO_AVATAR = 88;
-
 const styles = StyleSheet.create({
   contenido: {
     padding: spacing.lg,
@@ -79,24 +77,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  avatar: {
-    width: TAMANO_AVATAR,
-    height: TAMANO_AVATAR,
-    borderRadius: TAMANO_AVATAR / 2,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  avatarTexto: {
-    color: colors.white,
-    fontSize: fontSizes.xl,
-    fontWeight: 'bold',
-  },
   nombre: {
     fontSize: fontSizes.lg,
     fontWeight: 'bold',
     color: colors.text,
+    marginTop: spacing.sm,
   },
   email: {
     fontSize: fontSizes.sm,
@@ -133,6 +118,9 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.md,
     color: colors.textSecondary,
     fontStyle: 'italic',
+  },
+  editar: {
+    marginTop: spacing.md,
   },
   pendiente: {
     fontSize: fontSizes.sm,
