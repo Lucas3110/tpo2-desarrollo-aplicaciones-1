@@ -69,6 +69,18 @@ export async function dejarDeSeguirPublicacion(id) {
   return data;
 }
 
+// GET /hallado/seguidas
+//
+// La sección "Seguidas" del punto 9. Devuelve { seguidas, conNovedad }: las
+// publicaciones que la persona sigue, en cualquier estado (a quien sigue
+// algo le interesa justamente enterarse de que se resolvió o venció). Cada
+// una trae, además de lo de siempre, el estado que la persona vio la última
+// vez que la abrió (estadoVisto). Abrir el detalle lo actualiza solo.
+export async function misSeguidas() {
+  const { data } = await apiClient.get('/hallado/seguidas');
+  return data;
+}
+
 // GET /hallado/publicaciones/mias
 //
 // Devuelve { publicaciones, resumen }. El resumen cuenta SIEMPRE el total,

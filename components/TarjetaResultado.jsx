@@ -6,12 +6,15 @@
 // Las coordenadas se muestran como distancia ("a 1,2 km") cuando la persona
 // compartió su ubicación, y como par de números cuando no. Un par de números
 // sueltos no le dice nada a nadie; la distancia sí.
+//
+// `pie` es algo más que la pantalla quiera mostrar abajo de los datos (las
+// seguidas del punto 9 ponen el estado de la publicación).
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { urlDeFoto } from '../services/publicacionService';
 import { describirFecha } from '../utils/fechas';
 import { colors, fontSizes, radius, spacing } from '../config/theme';
 
-export default function TarjetaResultado({ publicacion, onPress }) {
+export default function TarjetaResultado({ publicacion, onPress, pie = null }) {
   const { titulo, categoria, barrio, fechaSuceso, coordenadas, distanciaKm, fotos } = publicacion;
   const portada = fotos.length > 0 ? fotos[0].url : null;
 
@@ -49,6 +52,8 @@ export default function TarjetaResultado({ publicacion, onPress }) {
             {fotos.length} fotos
           </Text>
         ) : null}
+
+        {pie}
       </View>
     </TouchableOpacity>
   );
