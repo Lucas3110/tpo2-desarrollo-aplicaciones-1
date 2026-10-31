@@ -15,6 +15,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -259,6 +260,7 @@ export default function DetalleReclamoScreen({ navigation, route }) {
               ? 'Aceptaron tu reclamo. Ya podés ver la dirección exacta en la publicación para coordinar la devolución.'
               : 'Aceptaste este reclamo. La publicación quedó resuelta.'}
           </Text>
+          <Contacto reclamo={reclamo} />
           <View style={styles.botones}>
             <Boton
               titulo="Ver la publicación"
@@ -283,6 +285,37 @@ function describirFechas(reclamo) {
   return enviado;
 }
 
+// Punto 2: el teléfono de la otra parte, sólo si eligió mostrarlo. El
+// backend ya lo decide: si no corresponde, `contacto.telefono` viene null.
+function Contacto({ reclamo }) {
+  if (!reclamo.contacto) return null;
+  const otro = reclamo.soyElReclamante ? reclamo.publicador : reclamo.reclamante;
+  const { telefono } = reclamo.contacto;
+
+  return (
+    <View style={styles.contacto}>
+      <Text style={styles.seccionTitulo}>Contacto</Text>
+      {telefono ? (
+        <>
+          <Text style={styles.texto}>
+            {otro.nombre}: {telefono}
+          </Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(`tel:${telefono.replace(/[^\d+]/g, '')}`)}
+            hitSlop={8}
+          >
+            <Text style={styles.enlace}>Llamar</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <Text style={styles.nota}>
+          {otro.nombre} prefiere no compartir su teléfono: coordinen la devolución a través de la app.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function Seccion({ titulo, children }) {
   return (
     <View style={styles.seccion}>
@@ -295,6 +328,9 @@ function Seccion({ titulo, children }) {
 const ANCHO_FOTO = Dimensions.get('window').width - spacing.lg * 2;
 
 const styles = StyleSheet.create({
+  contacto: {
+    marginTop: spacing.md,
+  },
   pantalla: {
     flex: 1,
     backgroundColor: colors.background,

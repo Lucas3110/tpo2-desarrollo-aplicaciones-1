@@ -88,3 +88,17 @@ export function mesYAnio(isoFechaHora) {
   if (Number.isNaN(fecha.getTime())) return '';
   return `${MESES[fecha.getMonth()]} de ${fecha.getFullYear()}`;
 }
+
+// La antigüedad del perfil (punto 2) en la unidad que se entiende de un
+// vistazo: "3 días", "5 meses", "2 años". El backend la manda en días.
+export function describirAntiguedad(dias) {
+  const n = Number(dias ?? 0);
+  if (n < 1) return 'menos de un día';
+  if (n < 30) return n === 1 ? '1 día' : `${n} días`;
+  if (n < 365) {
+    const meses = Math.floor(n / 30);
+    return meses === 1 ? '1 mes' : `${meses} meses`;
+  }
+  const anios = Math.floor(n / 365);
+  return anios === 1 ? '1 año' : `${anios} años`;
+}

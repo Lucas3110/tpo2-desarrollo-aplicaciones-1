@@ -49,10 +49,15 @@ export default function MenuScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.contenido}>
-      <View style={styles.tarjetaCuenta}>
+      <TouchableOpacity
+        style={styles.tarjetaCuenta}
+        onPress={() => navigation.navigate('Perfil')}
+        activeOpacity={0.7}
+      >
         <Text style={styles.nombre}>{usuario?.nombre}</Text>
         <Text style={styles.email}>{usuario?.email}</Text>
-      </View>
+        <Text style={styles.verPerfil}>Ver mi perfil</Text>
+      </TouchableOpacity>
 
       {SECCIONES.map((seccion) => (
         <View key={seccion.titulo}>
@@ -102,6 +107,12 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  verPerfil: {
+    fontSize: fontSizes.sm,
+    color: colors.secondary,
+    fontWeight: 'bold',
+    marginTop: spacing.sm,
   },
   seccion: {
     fontSize: fontSizes.xs,
