@@ -21,6 +21,8 @@ import ValorarScreen from '../screens/historial/ValorarScreen';
 import PerfilScreen from '../screens/perfil/PerfilScreen';
 import EditarPerfilScreen from '../screens/perfil/EditarPerfilScreen';
 import PerfilPublicoScreen from '../screens/perfil/PerfilPublicoScreen';
+import MisAlertasScreen from '../screens/alertas/MisAlertasScreen';
+import AlertaResultadosScreen from '../screens/alertas/AlertaResultadosScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -77,7 +79,8 @@ export default function MainNavigator() {
       <Stack.Screen name="PuntoDeEncuentro" component={pantallaPendiente('Punto de encuentro', 8)} options={{ title: 'Punto de encuentro' }} />
 
       {/* Punto 9 - alertas y seguidas */}
-      <Stack.Screen name="MisAlertas" component={pantallaPendiente('Mis alertas', 9)} options={{ title: 'Mis alertas' }} />
+      <Stack.Screen name="MisAlertas" component={MisAlertasScreen} options={{ title: 'Mis alertas' }} />
+      <Stack.Screen name="AlertaResultados" component={AlertaResultadosScreen} options={{ title: 'Alerta' }} />
       <Stack.Screen name="Seguidas" component={pantallaPendiente('Seguidas', 9)} options={{ title: 'Seguidas' }} />
 
       {/* Punto 10 - historial y valoraciones */}

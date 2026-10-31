@@ -31,3 +31,50 @@ export async function crearAlerta(criterios) {
   });
   return data;
 }
+
+// GET /hallado/alertas
+//
+// "Mis alertas". Devuelve { alertas, totalNuevas }. Cada alerta trae sus
+// criterios (con los nombres de la categoría y el barrio ya resueltos) y
+// cuántas publicaciones nuevas coinciden con ella. Una pausada siempre
+// cuenta 0: pausar es justamente no querer avisos.
+export async function misAlertas() {
+  const { data } = await apiClient.get('/hallado/alertas');
+  return data;
+}
+
+// PATCH /hallado/alertas/:id   { activa }
+//
+// Pausar y reanudar. Al reanudar, lo que se publicó mientras estuvo
+// pausada no cuenta como nuevo. Devuelve la alerta actualizada.
+export async function cambiarEstadoAlerta(id, activa) {
+  const { data } = await apiClient.patch(`/hallado/alertas/${id}`, { activa });
+  return data.alerta;
+}
+
+// DELETE /hallado/alertas/:id
+export async function eliminarAlerta(id) {
+  const { data } = await apiClient.delete(`/hallado/alertas/${id}`);
+  return data;
+}
+
+// GET /hallado/alertas/:id/publicaciones?pagina=&limite=
+//
+// Lo que encuentra la alerta, con el mismo formato y paginado que el
+// buscador, más esNueva en cada publicación. Lo publicado por uno mismo no
+// aparece. Mirar NO marca como visto: eso es marcarAlertaVista.
+export async function publicacionesDeAlerta(id, { pagina, limite } = {}) {
+  const { data } = await apiClient.get(`/hallado/alertas/${id}/publicaciones`, {
+    params: { pagina: pagina || undefined, limite: limite || undefined },
+  });
+  return data;
+}
+
+// POST /hallado/alertas/:id/vista
+//
+// Lo ya publicado deja de contar como nuevo. Devuelve la alerta con
+// nuevas = 0.
+export async function marcarAlertaVista(id) {
+  const { data } = await apiClient.post(`/hallado/alertas/${id}/vista`);
+  return data.alerta;
+}

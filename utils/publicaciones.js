@@ -31,3 +31,16 @@ const FRANJAS = {
 export function describirFranja(franja) {
   return FRANJAS[franja] ?? null;
 }
+
+// El texto de una alerta del punto 9 ("Perdí algo · Llaves · "rojas" ·
+// Palermo"). Las alertas vienen del backend con la categoría y el barrio
+// como objetos; esto las lleva a la misma forma que las búsquedas del
+// punto 3 para que las dos se lean igual.
+export function describirAlerta(alerta) {
+  const { queTePaso, categoria, barrio, q } = alerta.criterios;
+  const partes = [queTePaso === 'PERDI' ? 'Perdí algo' : 'Encontré algo'];
+  if (categoria) partes.push(categoria.nombre);
+  if (q) partes.push(`"${q}"`);
+  if (barrio) partes.push(barrio.nombre);
+  return partes.join(' · ');
+}
