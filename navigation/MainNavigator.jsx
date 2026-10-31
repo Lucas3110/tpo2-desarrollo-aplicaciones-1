@@ -24,7 +24,7 @@ import MisAlertasScreen from '../screens/alertas/MisAlertasScreen';
 import AlertaResultadosScreen from '../screens/alertas/AlertaResultadosScreen';
 import SeguidasScreen from '../screens/seguidas/SeguidasScreen';
 import BotonMenu from '../components/BotonMenu';
-import { pantallaPendiente } from '../components/PantallaPendiente';
+import PuntoDeEncuentroScreen from '../screens/encuentro/PuntoDeEncuentroScreen';
 import { colors } from '../config/theme';
 
 const Stack = createNativeStackNavigator();
@@ -74,7 +74,7 @@ export default function MainNavigator() {
       <Stack.Screen name="DetalleReclamo" component={DetalleReclamoScreen} options={{ title: 'Reclamo' }} />
 
       {/* Punto 8 - devolucion y punto de encuentro */}
-      <Stack.Screen name="PuntoDeEncuentro" component={pantallaPendiente('Punto de encuentro', 8)} options={{ title: 'Punto de encuentro' }} />
+      <Stack.Screen name="PuntoDeEncuentro" component={PuntoDeEncuentroScreen} options={{ title: 'Punto de encuentro' }} />
 
       {/* Punto 9 - alertas y seguidas */}
       <Stack.Screen name="MisAlertas" component={MisAlertasScreen} options={{ title: 'Mis alertas' }} />
