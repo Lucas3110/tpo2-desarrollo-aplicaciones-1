@@ -72,7 +72,7 @@ export default function DetalleReclamoScreen({ navigation, route }) {
   );
 
   function confirmarAceptar() {
-    // Aceptar habilita la coordinación y le muestra la dirección exacta a la otra
+    // Aceptar cierra el caso y le muestra la dirección exacta a la otra
     // persona: no se puede deshacer, así que se pregunta.
     Alert.alert(
       'Aceptar el reclamo',
@@ -248,7 +248,7 @@ export default function DetalleReclamoScreen({ navigation, route }) {
                 variante="secundario"
               />
               <Text style={styles.nota}>
-                Si aceptás, {reclamo.reclamante.nombre} va a ver la dirección exacta y podrán acordar dónde encontrarse.
+                Si aceptás, {reclamo.reclamante.nombre} va a ver la dirección exacta y la publicación queda resuelta.
               </Text>
             </View>
           )}
@@ -258,13 +258,14 @@ export default function DetalleReclamoScreen({ navigation, route }) {
           <Text style={styles.texto}>
             {reclamo.soyElReclamante
               ? 'Aceptaron tu reclamo. Ya podés ver la dirección exacta en la publicación para coordinar la devolución.'
-              : 'Aceptaste este reclamo. Ya pueden coordinar la devolución.'}
+              : 'Aceptaste este reclamo. La publicación quedó resuelta.'}
           </Text>
           <Contacto reclamo={reclamo} />
           <View style={styles.botones}>
             <Boton
               titulo="Punto de encuentro"
               onPress={() => navigation.navigate('PuntoDeEncuentro', { reclamoId: reclamo.id })}
+              variante="secundario"
             />
             <Boton
               titulo="Ver la publicación"

@@ -1,13 +1,47 @@
+// Punto 8: acordar el punto de encuentro después de aceptar un reclamo.
+//
+// "Quien tiene el objeto propone un punto de encuentro, y la otra parte
+// puede aceptarlo o sugerir uno alternativo." "Cómo llegar" abre Maps con
+// la dirección del encuentro, que puede diferir de la publicación.
+//
+// Los permisos vienen del backend para mantener una sola regla sobre quién
+// puede actuar. La versión evita aceptar una propuesta que ya cambió en
+// el otro teléfono. Aceptar el reclamo ya cerró el caso: esta pantalla sólo
+// acuerda el lugar y no vuelve a confirmar la devolución.
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, Alert, Linking, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import Aviso from '../../components/Aviso';
-import { obtenerEncuentro, proponerEncuentro, aceptarEncuentro, concretarEncuentro } from '../../services/encuentroService';
-import { ubicacionActual, direccionDeCoordenadas, formatearCoordenadas } from '../../services/ubicacionService';
+import {
+  obtenerEncuentro,
+  proponerEncuentro,
+  aceptarEncuentro,
+} from '../../services/encuentroService';
+import {
+  ubicacionActual,
+  direccionDeCoordenadas,
+  formatearCoordenadas,
+} from '../../services/ubicacionService';
 import { urlComoLlegar, urlMapsWeb } from '../../utils/mapas';
 import { colors, spacing, fontSizes, radius } from '../../config/theme';
+
+const DESINCRONIZADO = [
+  'ENCUENTRO_CAMBIO',
+  'ENCUENTRO_ACORDADO',
+  'ENCUENTRO_ESPERA_RESPUESTA',
+  'ENCUENTRO_INEXISTENTE',
+];
 
 export default function PuntoDeEncuentroScreen({ route, navigation }) {
   const reclamoId = route.params?.reclamoId;
@@ -27,12 +61,14 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
     const numero = ++lectura.current;
     setCargando(true);
     try {
-      if (!Number.isInteger(Number(reclamoId)) || Number(reclamoId) <= 0) throw new Error('Abrí el encuentro desde un reclamo aceptado.');
+      if (!Number.isInteger(Number(reclamoId)) || Number(reclamoId) <= 0)
+        throw new Error('Abrí el encuentro desde un reclamo aceptado.');
       const resultado = await obtenerEncuentro(reclamoId);
       if (!vigente.current || numero !== lectura.current) return;
       setDatos(resultado);
       setSinConexion(false);
       setError(null);
+      return true;
     } catch (e) {
       if (!vigente.current || numero !== lectura.current) return;
       setError(e.message);
@@ -42,11 +78,16 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
     }
   }, [reclamoId]);
 
-  useFocusEffect(useCallback(() => {
-    vigente.current = true;
-    cargar();
-    return () => { vigente.current = false; lectura.current += 1; };
-  }, [cargar]));
+  useFocusEffect(
+    useCallback(() => {
+      vigente.current = true;
+      cargar();
+      return () => {
+        vigente.current = false;
+        lectura.current += 1;
+      };
+    }, [cargar])
+  );
 
   async function ejecutar(operacion) {
     if (operando.current) return;
@@ -61,7 +102,13 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
       if (!vigente.current) return;
       // Una respuesta perdida puede haber guardado la propuesta. Nunca reenviamos
       // automáticamente: el usuario refresca para ver el estado del servidor.
-      if (e.codigo === 'ENCUENTRO_CAMBIO' || e.codigo === 'YA_CONCRETADO') await cargar();
+      if (DESINCRONIZADO.includes(e.codigo)) {
+        const actualizado = await cargar();
+        // Si el refresco falla, conserva su aviso de conexión y las acciones
+        // deshabilitadas: el conflicto original no significa que ya se actualizó.
+        if (actualizado && vigente.current) setError(e.message);
+        return;
+      }
       setError(e.message);
       setSinConexion(Boolean(e.esDeConexion));
     } finally {
@@ -71,10 +118,15 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
   }
 
   async function enviar() {
-    if (!direccion.trim()) { setError('Escribí la dirección y la localidad del encuentro.'); return; }
+    if (!direccion.trim()) {
+      setError('Escribí la dirección y la localidad del encuentro.');
+      return;
+    }
     await ejecutar(async () => {
       const resultado = await proponerEncuentro(reclamoId, {
-        direccion: direccion.trim(), lat: coordenadas?.lat ?? null, lng: coordenadas?.lng ?? null,
+        direccion: direccion.trim(),
+        lat: coordenadas?.lat ?? null,
+        lng: coordenadas?.lng ?? null,
         version: datos.encuentro?.version ?? 0,
       });
       if (!vigente.current) return;
@@ -92,16 +144,6 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
     });
   }
 
-  function confirmarEntrega() {
-    Alert.alert('Confirmar devolución', 'Confirmá solamente si el objeto o la mascota ya fue entregado. Esto cierra el caso y habilita las valoraciones.', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Ya se entregó', onPress: () => ejecutar(async () => {
-        const resultado = await concretarEncuentro(reclamoId, datos.encuentro.version);
-        if (vigente.current) setDatos(resultado);
-      }) },
-    ]);
-  }
-
   function tomarUbicacion() {
     ejecutar(async () => {
       const punto = await ubicacionActual();
@@ -114,72 +156,193 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
 
   function llegar() {
     ejecutar(async () => {
-      try { await Linking.openURL(urlComoLlegar(datos.encuentro, Platform.OS)); }
-      catch {
-        try { await Linking.openURL(urlMapsWeb(datos.encuentro)); }
-        catch { throw new Error('No se pudo abrir Maps. Podés copiar la dirección que aparece arriba.'); }
+      try {
+        await Linking.openURL(urlComoLlegar(datos.encuentro, Platform.OS));
+      } catch {
+        try {
+          await Linking.openURL(urlMapsWeb(datos.encuentro));
+        } catch {
+          throw new Error('No se pudo abrir Maps. Podés copiar la dirección que aparece arriba.');
+        }
       }
     });
   }
 
-  if (!datos) return (
-    <View style={styles.centro}>
-      {cargando ? <ActivityIndicator size="large" color={colors.primary} /> : <>
-        <Aviso mensaje={error} /><Boton titulo="Reintentar" onPress={cargar} />
-      </>}
-    </View>
-  );
+  if (!datos)
+    return (
+      <View style={styles.centro}>
+        {cargando ? (
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+          />
+        ) : (
+          <>
+            <Aviso mensaje={error} />
+            <Boton
+              titulo="Reintentar"
+              onPress={cargar}
+            />
+          </>
+        )}
+      </View>
+    );
 
   const punto = datos.encuentro;
   const inactivo = ocupado || cargando || sinConexion;
   const formulario = datos.puedoProponer && (!punto || alternativa);
-  const estado = datos.resuelto ? 'Devolución concretada' : !punto ? 'Falta proponer un lugar' : punto.estado === 'ACEPTADO' ? 'Punto de encuentro acordado' : 'Propuesta pendiente';
+  const estado = !punto
+    ? 'Falta proponer un lugar'
+    : datos.acordado
+      ? 'Punto de encuentro acordado'
+      : 'Propuesta pendiente';
   return (
-    <ScrollView style={styles.pantalla} contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargar} enabled={!ocupado} />}>
+    <ScrollView
+      style={styles.pantalla}
+      contentContainerStyle={styles.contenido}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={cargando}
+          onRefresh={cargar}
+          enabled={!ocupado}
+        />
+      }
+    >
       <Text style={styles.titulo}>{datos.publicacion.titulo}</Text>
       <Text style={styles.estado}>{estado}</Text>
       <Aviso mensaje={error} />
-      {sinConexion && <Aviso tipo="info" mensaje="Necesitás conexión para coordinar. Conservamos lo último que cargó; tocá Actualizar para reintentar." />}
-      <Boton titulo="Actualizar" onPress={cargar} cargando={cargando} deshabilitado={ocupado} variante="secundario" />
+      {sinConexion ? (
+        <Aviso
+          tipo="info"
+          mensaje="Necesitás conexión para coordinar. Conservamos lo último que cargó; tocá Actualizar para reintentar."
+        />
+      ) : null}
+      <Boton
+        titulo="Actualizar"
+        onPress={cargar}
+        cargando={cargando}
+        deshabilitado={ocupado}
+        variante="secundario"
+      />
 
-      {punto && <View style={styles.tarjeta}>
-        <Text style={styles.subtitulo}>Lugar del encuentro</Text>
-        <Text selectable style={styles.texto}>{punto.direccion}</Text>
-        {punto.lat !== null && <Text selectable style={styles.nota}>{formatearCoordenadas(punto)}</Text>}
-        <Boton titulo="Cómo llegar" onPress={llegar} deshabilitado={ocupado} variante="secundario" />
-        {punto.estado === 'PROPUESTO' && !datos.resuelto && <Text style={styles.nota}>
-          {punto.propuestoPorMi ? 'La otra persona debe aceptar tu propuesta o sugerir otro lugar.' : 'Podés aceptar este lugar o sugerir una alternativa.'}
-        </Text>}
-      </View>}
+      {punto ? (
+        <View style={styles.tarjeta}>
+          <Text style={styles.subtitulo}>Lugar del encuentro</Text>
+          <Text
+            selectable
+            style={styles.texto}
+          >
+            {punto.direccion}
+          </Text>
+          {punto.lat !== null ? (
+            <Text
+              selectable
+              style={styles.nota}
+            >
+              {formatearCoordenadas(punto)}
+            </Text>
+          ) : null}
+          <Boton
+            titulo="Cómo llegar"
+            onPress={llegar}
+            deshabilitado={ocupado}
+            variante="secundario"
+          />
+          {punto.estado === 'PROPUESTO' ? (
+            <Text style={styles.nota}>
+              {punto.propuestoPorMi
+                ? 'La otra persona debe aceptar tu propuesta o sugerir otro lugar.'
+                : 'Podés aceptar este lugar o sugerir una alternativa.'}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
-      {!punto && !datos.puedoProponer && !datos.resuelto && <Aviso tipo="info" mensaje="Quien tiene el objeto debe proponer el primer punto de encuentro. Volvé a actualizar para ver su propuesta." />}
+      {!punto && !datos.puedoProponer ? (
+        <Aviso
+          tipo="info"
+          mensaje="Quien tiene el objeto debe proponer el primer punto de encuentro. Volvé a actualizar para ver su propuesta."
+        />
+      ) : null}
 
-      {datos.puedoAceptar && !alternativa && <View style={styles.tarjeta}>
-        <Boton titulo="Aceptar este lugar" onPress={aceptar} deshabilitado={inactivo} />
-        <Boton titulo="Sugerir otro lugar" onPress={() => setAlternativa(true)} deshabilitado={inactivo} variante="secundario" />
-      </View>}
+      {datos.puedoAceptar && !alternativa ? (
+        <View style={styles.tarjeta}>
+          <Boton
+            titulo="Aceptar este lugar"
+            onPress={aceptar}
+            deshabilitado={inactivo}
+          />
+          <Boton
+            titulo="Sugerir otro lugar"
+            onPress={() => setAlternativa(true)}
+            deshabilitado={inactivo}
+            variante="secundario"
+          />
+        </View>
+      ) : null}
 
-      {formulario && <View style={styles.tarjeta}>
-        <Text style={styles.subtitulo}>{punto ? 'Tu alternativa' : 'Proponé un punto de encuentro'}</Text>
-        <Text style={styles.nota}>Elegí un lugar fácil de reconocer. Incluí calle, altura y localidad.</Text>
-        <CampoTexto etiqueta="Dirección del encuentro" value={direccion} maxLength={255} editable={!ocupado}
-          placeholder="Av. Santa Fe 3253, CABA"
-          onChangeText={(texto) => { setDireccion(texto); setCoordenadas(null); }} />
-        {coordenadas && <Text style={styles.nota}>Ubicación adjunta: {formatearCoordenadas(coordenadas)}. Si editás la dirección se usará el texto para navegar.</Text>}
-        <Boton titulo="Usar mi ubicación actual" onPress={tomarUbicacion} deshabilitado={inactivo} variante="secundario" />
-        <Boton titulo={punto ? 'Enviar alternativa' : 'Enviar propuesta'} onPress={enviar} deshabilitado={inactivo} cargando={ocupado} />
-        {punto && <Boton titulo="Cancelar" onPress={() => setAlternativa(false)} deshabilitado={ocupado} variante="secundario" />}
-      </View>}
+      {formulario ? (
+        <View style={styles.tarjeta}>
+          <Text style={styles.subtitulo}>
+            {punto ? 'Tu alternativa' : 'Proponé un punto de encuentro'}
+          </Text>
+          <Text style={styles.nota}>
+            Elegí un lugar fácil de reconocer. Incluí calle, altura y localidad.
+          </Text>
+          <CampoTexto
+            etiqueta="Dirección del encuentro"
+            value={direccion}
+            maxLength={255}
+            editable={!ocupado}
+            placeholder="Av. Santa Fe 3253, CABA"
+            onChangeText={(texto) => {
+              setDireccion(texto);
+              setCoordenadas(null);
+            }}
+          />
+          {coordenadas ? (
+            <Text style={styles.nota}>
+              Ubicación adjunta: {formatearCoordenadas(coordenadas)}. Si editás la dirección se
+              usará el texto para navegar.
+            </Text>
+          ) : null}
+          <Boton
+            titulo="Usar mi ubicación actual"
+            onPress={tomarUbicacion}
+            deshabilitado={inactivo}
+            variante="secundario"
+          />
+          <Boton
+            titulo={punto ? 'Enviar alternativa' : 'Enviar propuesta'}
+            onPress={enviar}
+            deshabilitado={inactivo}
+            cargando={ocupado}
+          />
+          {punto ? (
+            <Boton
+              titulo="Cancelar"
+              onPress={() => setAlternativa(false)}
+              deshabilitado={ocupado}
+              variante="secundario"
+            />
+          ) : null}
+        </View>
+      ) : null}
 
-      {datos.puedoConcretar && <View style={styles.tarjeta}>
-        <Text style={styles.texto}>El lugar ya está acordado. Cuando se hayan encontrado y entregado el objeto, cualquiera de los dos puede confirmar.</Text>
-        <Boton titulo="Confirmar devolución realizada" onPress={confirmarEntrega} deshabilitado={inactivo} cargando={ocupado} />
-      </View>}
-      {datos.resuelto && <View style={styles.tarjeta}>
-        <Aviso tipo="exito" mensaje="La devolución quedó registrada. Podés verla y valorar a la otra persona desde tu historial." />
-        <Boton titulo="Ver historial" onPress={() => navigation.navigate('Historial')} />
-      </View>}
+      {datos.acordado ? (
+        <View style={styles.tarjeta}>
+          <Aviso
+            tipo="exito"
+            mensaje="Listo, el lugar quedó acordado. Cuando se encuentren, podés valorar a la otra persona desde tu historial."
+          />
+          <Boton
+            titulo="Ver historial"
+            onPress={() => navigation.navigate('Historial')}
+            variante="secundario"
+          />
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -187,10 +350,23 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colors.background },
   contenido: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl },
-  centro: { flex: 1, padding: spacing.lg, justifyContent: 'center', gap: spacing.md, backgroundColor: colors.background },
+  centro: {
+    flex: 1,
+    padding: spacing.lg,
+    justifyContent: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.background,
+  },
   titulo: { fontSize: fontSizes.xl, fontWeight: 'bold', color: colors.text },
   estado: { fontSize: fontSizes.md, fontWeight: 'bold', color: colors.primary },
-  tarjeta: { padding: spacing.md, gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  tarjeta: {
+    padding: spacing.md,
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   subtitulo: { fontSize: fontSizes.lg, fontWeight: 'bold', color: colors.text },
   texto: { fontSize: fontSizes.md, lineHeight: 24, color: colors.text },
   nota: { fontSize: fontSizes.sm, lineHeight: 21, color: colors.textSecondary },
