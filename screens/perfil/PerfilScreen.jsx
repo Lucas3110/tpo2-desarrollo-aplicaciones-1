@@ -4,10 +4,25 @@
 // teléfono de contacto." Los datos salen del AuthContext y no del backend,
 // así la pantalla tiene algo que mostrar desde el primer render, sin
 // spinner.
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+//
+// "La persona decide si su teléfono es visible para la otra parte una vez
+// aceptado un reclamo, o si prefiere comunicarse solo a través de la app."
+// Eso es el switch de Privacidad: se guarda apenas se toca, como cualquier
+// ajuste de Android, sin botón de "Guardar".
+import { useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Aviso from '../../components/Aviso';
 import Avatar from '../../components/Avatar';
 import Boton from '../../components/Boton';
 import { useAuth } from '../../hooks/useAuth';
+import { actualizarMisDatos, datosDe } from '../../services/perfilService';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 function Dato({ etiqueta, valor }) {
@@ -20,7 +35,27 @@ function Dato({ etiqueta, valor }) {
 }
 
 export default function PerfilScreen({ navigation }) {
-  const { usuario } = useAuth();
+  const { usuario, actualizarUsuario } = useAuth();
+
+  const [guardandoPrivacidad, setGuardandoPrivacidad] = useState(false);
+  const [errorPrivacidad, setErrorPrivacidad] = useState(null);
+
+  async function cambiarVisibilidad(visible) {
+    setErrorPrivacidad(null);
+    setGuardandoPrivacidad(true);
+    try {
+      const actualizado = await actualizarMisDatos({ ...datosDe(usuario), telefonoVisible: visible });
+      await actualizarUsuario(actualizado);
+    } catch (e) {
+      // El switch no se movió: su valor sale del usuario de la sesión, que
+      // no cambió. Sólo queda contar por qué.
+      setErrorPrivacidad(e.message);
+    } finally {
+      setGuardandoPrivacidad(false);
+    }
+  }
+
+  const tieneTelefono = Boolean(usuario?.telefono);
 
   return (
     <ScrollView contentContainerStyle={styles.contenido}>
@@ -45,10 +80,26 @@ export default function PerfilScreen({ navigation }) {
       </View>
 
       <Text style={styles.seccion}>Privacidad</Text>
+      <Aviso mensaje={errorPrivacidad} />
       <View style={styles.tarjeta}>
-        <Text style={styles.pendiente}>
-          Acá vas a poder elegir si tu teléfono se muestra cuando aceptás un reclamo.
-        </Text>
+        <View style={styles.fila}>
+          <View style={styles.filaTexto}>
+            <Text style={styles.valor}>Mostrar mi teléfono</Text>
+            <Text style={styles.explicacion}>
+              {!tieneTelefono
+                ? 'Primero cargá un teléfono en tus datos.'
+                : usuario?.telefonoVisible
+                  ? 'Cuando aceptes un reclamo, o te acepten uno, la otra persona va a ver tu teléfono.'
+                  : 'Tu teléfono no se comparte: la otra parte se comunica con vos sólo a través de la app.'}
+            </Text>
+          </View>
+          <Switch
+            value={Boolean(usuario?.telefonoVisible)}
+            onValueChange={cambiarVisibilidad}
+            disabled={!tieneTelefono || guardandoPrivacidad}
+            trackColor={{ true: colors.primary, false: colors.border }}
+          />
+        </View>
       </View>
 
       <Text style={styles.seccion}>Reputación</Text>
@@ -121,6 +172,19 @@ const styles = StyleSheet.create({
   },
   editar: {
     marginTop: spacing.md,
+  },
+  fila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  filaTexto: {
+    flex: 1,
+  },
+  explicacion: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
   pendiente: {
     fontSize: fontSizes.sm,

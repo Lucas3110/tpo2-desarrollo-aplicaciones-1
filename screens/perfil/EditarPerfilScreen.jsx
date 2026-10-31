@@ -173,6 +173,7 @@ export default function EditarPerfilScreen({ navigation }) {
           error={errores.telefono}
           maxLength={LIMITES.TELEFONO_MAX}
           keyboardType="phone-pad"
+          ayuda="Desde tu perfil elegís si se muestra cuando se acepta un reclamo."
         />
 
         <View style={styles.botones}>
