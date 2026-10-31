@@ -32,3 +32,12 @@ export function datosDe(usuario) {
     telefonoVisible: usuario.telefonoVisible,
   };
 }
+
+// GET /hallado/usuarios/:id/perfil
+//
+// La reputación de la persona. Sin teléfono ni
+// publicaciones: es lo que ve cualquiera, también para el perfil propio.
+export async function obtenerPerfilPublico(id) {
+  const { data } = await apiClient.get(`/hallado/usuarios/${id}/perfil`);
+  return data.perfil;
+}

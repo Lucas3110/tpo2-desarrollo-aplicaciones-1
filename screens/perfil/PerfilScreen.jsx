@@ -3,14 +3,17 @@
 // "Ver y editar los datos personales: nombre, foto de perfil, barrio y
 // teléfono de contacto." Los datos salen del AuthContext y no del backend,
 // así la pantalla tiene algo que mostrar desde el primer render, sin
-// spinner.
+// spinner. Lo que sí se pide es la reputación, que cambia sin que la persona
+// haga nada (alguien la valora) y por eso se recarga cada vez que se vuelve.
 //
 // "La persona decide si su teléfono es visible para la otra parte una vez
 // aceptado un reclamo, o si prefiere comunicarse solo a través de la app."
 // Eso es el switch de Privacidad: se guarda apenas se toca, como cualquier
 // ajuste de Android, sin botón de "Guardar".
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Switch,
@@ -21,8 +24,9 @@ import {
 import Aviso from '../../components/Aviso';
 import Avatar from '../../components/Avatar';
 import Boton from '../../components/Boton';
+import ReputacionPerfil from '../../components/ReputacionPerfil';
 import { useAuth } from '../../hooks/useAuth';
-import { actualizarMisDatos, datosDe } from '../../services/perfilService';
+import { actualizarMisDatos, datosDe, obtenerPerfilPublico } from '../../services/perfilService';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 function Dato({ etiqueta, valor }) {
@@ -37,8 +41,25 @@ function Dato({ etiqueta, valor }) {
 export default function PerfilScreen({ navigation }) {
   const { usuario, actualizarUsuario } = useAuth();
 
+  const [perfil, setPerfil] = useState(null);
+  const [errorPerfil, setErrorPerfil] = useState(null);
   const [guardandoPrivacidad, setGuardandoPrivacidad] = useState(false);
   const [errorPrivacidad, setErrorPrivacidad] = useState(null);
+
+  async function cargarPerfil() {
+    setErrorPerfil(null);
+    try {
+      setPerfil(await obtenerPerfilPublico(usuario.id));
+    } catch (e) {
+      setErrorPerfil(e.message);
+    }
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+      cargarPerfil();
+    }, [usuario?.id])
+  );
 
   async function cambiarVisibilidad(visible) {
     setErrorPrivacidad(null);
@@ -104,7 +125,16 @@ export default function PerfilScreen({ navigation }) {
 
       <Text style={styles.seccion}>Reputación</Text>
       <View style={styles.tarjeta}>
-        <Text style={styles.pendiente}>Acá van a aparecer tus devoluciones, valoraciones e insignias.</Text>
+        {perfil ? (
+          <ReputacionPerfil reputacion={perfil.reputacion} />
+        ) : errorPerfil ? (
+          <>
+            <Aviso mensaje={errorPerfil} />
+            <Boton titulo="Reintentar" onPress={cargarPerfil} variante="secundario" />
+          </>
+        ) : (
+          <ActivityIndicator color={colors.primary} />
+        )}
       </View>
 
       <TouchableOpacity
@@ -185,10 +215,6 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     color: colors.textSecondary,
     marginTop: spacing.xs,
-  },
-  pendiente: {
-    fontSize: fontSizes.sm,
-    color: colors.textSecondary,
   },
   enlace: {
     marginTop: spacing.lg,
