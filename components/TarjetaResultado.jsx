@@ -6,17 +6,25 @@
 // Las coordenadas se muestran como distancia ("a 1,2 km") cuando la persona
 // compartió su ubicación, y como par de números cuando no. Un par de números
 // sueltos no le dice nada a nadie; la distancia sí.
+//
+// `pie` es algo más que la pantalla quiera mostrar abajo de los datos (las
+// seguidas del punto 9 ponen el estado de la publicación). `destacada`
+// marca la tarjeta cuando tiene una novedad (punto 9).
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { urlDeFoto } from '../services/publicacionService';
 import { describirFecha } from '../utils/fechas';
 import { colors, fontSizes, radius, spacing } from '../config/theme';
 
-export default function TarjetaResultado({ publicacion, onPress }) {
+export default function TarjetaResultado({ publicacion, onPress, pie = null, destacada = false }) {
   const { titulo, categoria, barrio, fechaSuceso, coordenadas, distanciaKm, fotos } = publicacion;
   const portada = fotos.length > 0 ? fotos[0].url : null;
 
   return (
-    <TouchableOpacity style={styles.tarjeta} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={[styles.tarjeta, destacada ? styles.destacada : null]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
       {portada ? (
         <Image source={{ uri: urlDeFoto(portada) }} style={styles.foto} />
       ) : (
@@ -49,6 +57,8 @@ export default function TarjetaResultado({ publicacion, onPress }) {
             {fotos.length} fotos
           </Text>
         ) : null}
+
+        {pie}
       </View>
     </TouchableOpacity>
   );
@@ -70,6 +80,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.sm,
     padding: spacing.md,
+  },
+  destacada: {
+    borderColor: colors.danger,
+    borderLeftWidth: 4,
   },
   foto: {
     width: 88,

@@ -27,6 +27,7 @@ import {
   obtenerBarrios,
   obtenerCategorias,
 } from '../../services/publicacionService';
+import { crearAlerta } from '../../services/alertaService';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 const CUANDO = [
@@ -56,6 +57,11 @@ export default function ResultadosScreen({ navigation, route }) {
   const [cargandoMas, setCargandoMas] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
   const [error, setError] = useState(null);
+
+  // Punto 9: guardar la búsqueda como alerta. El aviso de confirmación es
+  // de esta búsqueda: si se ajustan los filtros, ya es otra y se borra.
+  const [guardandoAlerta, setGuardandoAlerta] = useState(false);
+  const [avisoAlerta, setAvisoAlerta] = useState(null);
 
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [categorias, setCategorias] = useState([]);
@@ -106,7 +112,26 @@ export default function ResultadosScreen({ navigation, route }) {
 
   useEffect(() => {
     buscar(criterios);
+    setAvisoAlerta(null);
   }, [criterios, buscar]);
+
+  async function guardarAlerta() {
+    setGuardandoAlerta(true);
+    setAvisoAlerta(null);
+    try {
+      const { creada } = await crearAlerta(criterios);
+      setAvisoAlerta({
+        tipo: creada ? 'exito' : 'info',
+        mensaje: creada
+          ? 'Listo, guardamos la alerta. En "Mis alertas" vas a ver lo que se publique de acá en adelante.'
+          : 'Ya tenías esta búsqueda guardada como alerta.',
+      });
+    } catch (e) {
+      setAvisoAlerta({ tipo: 'error', mensaje: e.message });
+    } finally {
+      setGuardandoAlerta(false);
+    }
+  }
 
   function aplicarFiltros(nuevos) {
     setPanelAbierto(false);
@@ -148,7 +173,19 @@ export default function ResultadosScreen({ navigation, route }) {
 
   return (
     <View style={styles.pantalla}>
-      <Resumen criterios={criterios} etiquetas={etiquetas} total={paginado?.total} />
+      <Resumen
+        criterios={criterios}
+        etiquetas={etiquetas}
+        total={paginado?.total}
+        guardandoAlerta={guardandoAlerta}
+        onGuardarAlerta={guardarAlerta}
+      />
+
+      {avisoAlerta ? (
+        <View style={styles.avisoAlerta}>
+          <Aviso mensaje={avisoAlerta.mensaje} tipo={avisoAlerta.tipo} />
+        </View>
+      ) : null}
 
       <View style={styles.barra}>
         <TouchableOpacity
@@ -240,7 +277,8 @@ export default function ResultadosScreen({ navigation, route }) {
           <SinResultados
             criterios={criterios}
             onPublicar={() => navigation.navigate('Publicar')}
-            onGuardarAlerta={() => navigation.navigate('MisAlertas')}
+            guardandoAlerta={guardandoAlerta}
+            onGuardarAlerta={guardarAlerta}
             onRefinar={() => setPanelAbierto(true)}
           />
         }
@@ -275,7 +313,7 @@ function nombreDe(opciones, id, anterior) {
   return opciones.find((o) => o.id === id)?.nombre ?? anterior ?? null;
 }
 
-function Resumen({ criterios, etiquetas, total }) {
+function Resumen({ criterios, etiquetas, total, guardandoAlerta, onGuardarAlerta }) {
   // Se arma con lo que la persona eligió, no con los códigos internos.
   const partes = [];
   partes.push(criterios.queTePaso === 'PERDI' ? 'Lo que otros encontraron' : 'Lo que otros perdieron');
@@ -286,19 +324,31 @@ function Resumen({ criterios, etiquetas, total }) {
 
   return (
     <View style={styles.resumen}>
-      <Text style={styles.resumenTexto}>{partes.join(' · ')}</Text>
-      {total !== undefined ? (
-        <Text style={styles.resumenTotal}>
-          {total === 0 ? 'Sin resultados' : `${total} ${total === 1 ? 'resultado' : 'resultados'}`}
-        </Text>
-      ) : null}
+      <View style={styles.resumenDatos}>
+        <Text style={styles.resumenTexto}>{partes.join(' · ')}</Text>
+        {total !== undefined ? (
+          <Text style={styles.resumenTotal}>
+            {total === 0 ? 'Sin resultados' : `${total} ${total === 1 ? 'resultado' : 'resultados'}`}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* "Cualquier búsqueda puede guardarse como alerta": también las que
+          traen resultados, no sólo las vacías. */}
+      <TouchableOpacity onPress={onGuardarAlerta} disabled={guardandoAlerta} hitSlop={8}>
+        {guardandoAlerta ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          <Text style={styles.enlace}>Guardar alerta</Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
 
 // "Si no hay resultados, la app ofrece publicar la propia pérdida o hallazgo,
 // o guardar la búsqueda como alerta."
-function SinResultados({ criterios, onPublicar, onGuardarAlerta, onRefinar }) {
+function SinResultados({ criterios, onPublicar, guardandoAlerta, onGuardarAlerta, onRefinar }) {
   return (
     <View style={styles.vacio}>
       <Text style={styles.vacioTitulo}>No encontramos nada</Text>
@@ -313,7 +363,12 @@ function SinResultados({ criterios, onPublicar, onGuardarAlerta, onRefinar }) {
           titulo={criterios.queTePaso === 'PERDI' ? 'Publicar lo que perdí' : 'Publicar lo que encontré'}
           onPress={onPublicar}
         />
-        <Boton titulo="Avisarme si aparece" onPress={onGuardarAlerta} variante="secundario" />
+        <Boton
+          titulo="Avisarme si aparece"
+          onPress={onGuardarAlerta}
+          cargando={guardandoAlerta}
+          variante="secundario"
+        />
         <TouchableOpacity style={styles.vacioEnlace} onPress={onRefinar}>
           <Text style={styles.enlace}>Probar con otros filtros</Text>
         </TouchableOpacity>
@@ -420,6 +475,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   resumen: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  resumenDatos: {
+    flex: 1,
+  },
+  avisoAlerta: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },

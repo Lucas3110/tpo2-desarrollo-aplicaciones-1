@@ -26,6 +26,7 @@ import {
 } from 'react-native';
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
+import BotonMenu from '../../components/BotonMenu';
 import CampoTexto from '../../components/CampoTexto';
 import PasosIndicador from '../../components/PasosIndicador';
 import SelectorLista from '../../components/SelectorLista';
@@ -36,6 +37,7 @@ import {
   guardarBusqueda,
   leerBusquedas,
 } from '../../services/historialBusquedasService';
+import { obtenerNovedades } from '../../services/alertaService';
 import { obtenerBarrios, obtenerCategorias } from '../../services/publicacionService';
 import { ubicacionActual } from '../../services/ubicacionService';
 import { hoyIso, isoATexto, isoDeHace, textoAIso } from '../../utils/fechas';
@@ -102,6 +104,26 @@ export default function BuscadorScreen({ navigation }) {
       // adonde estaba.
       setPaso(0);
     }, [usuario?.id])
+  );
+
+  // Punto 9: el indicador de novedad en el botón del menú. Se pide al tomar
+  // foco, así al volver de mirar las alertas o las seguidas ya se apagó.
+  useFocusEffect(
+    useCallback(() => {
+      obtenerNovedades()
+        .then((novedades) =>
+          navigation.setOptions({
+            headerRight: () => (
+              <BotonMenu
+                hayNovedades={novedades.hayNovedades}
+                onPress={() => navigation.navigate('Menu')}
+              />
+            ),
+          })
+        )
+        // Sin el resumen el botón queda como estaba, sin el punto.
+        .catch(() => {});
+    }, [navigation])
   );
 
   async function cargarCatalogos() {
