@@ -27,6 +27,7 @@ import Boton from '../../components/Boton';
 import ReputacionPerfil from '../../components/ReputacionPerfil';
 import { useAuth } from '../../hooks/useAuth';
 import { actualizarMisDatos, datosDe, obtenerPerfilPublico } from '../../services/perfilService';
+import { describirAntiguedad } from '../../utils/fechas';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 function Dato({ etiqueta, valor }) {
@@ -84,6 +85,11 @@ export default function PerfilScreen({ navigation }) {
         <Avatar nombre={usuario?.nombre} fotoUrl={usuario?.fotoUrl} />
         <Text style={styles.nombre}>{usuario?.nombre}</Text>
         <Text style={styles.email}>{usuario?.email}</Text>
+        {perfil ? (
+          <Text style={styles.antiguedad}>
+            En Hallado hace {describirAntiguedad(perfil.antiguedadDias)}
+          </Text>
+        ) : null}
       </View>
 
       <Text style={styles.seccion}>Datos personales</Text>
@@ -172,6 +178,11 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  antiguedad: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
   seccion: {
     fontSize: fontSizes.xs,

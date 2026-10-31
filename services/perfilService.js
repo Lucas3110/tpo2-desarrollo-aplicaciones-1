@@ -35,9 +35,16 @@ export function datosDe(usuario) {
 
 // GET /hallado/usuarios/:id/perfil
 //
-// La reputación y las insignias (con su progreso). Sin teléfono ni
+// Reputación, insignias (con su progreso) y antigüedad. Sin teléfono ni
 // publicaciones: es lo que ve cualquiera, también para el perfil propio.
 export async function obtenerPerfilPublico(id) {
   const { data } = await apiClient.get(`/hallado/usuarios/${id}/perfil`);
   return data.perfil;
+}
+
+// GET /hallado/usuarios/:id/agradecimientos
+// Los agradecimientos públicos que le dejaron quienes recuperaron algo.
+export async function obtenerAgradecimientos(id) {
+  const { data } = await apiClient.get(`/hallado/usuarios/${id}/agradecimientos`);
+  return data.agradecimientos;
 }

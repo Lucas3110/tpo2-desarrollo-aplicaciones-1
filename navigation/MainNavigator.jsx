@@ -20,6 +20,7 @@ import HistorialScreen from '../screens/historial/HistorialScreen';
 import ValorarScreen from '../screens/historial/ValorarScreen';
 import PerfilScreen from '../screens/perfil/PerfilScreen';
 import EditarPerfilScreen from '../screens/perfil/EditarPerfilScreen';
+import PerfilPublicoScreen from '../screens/perfil/PerfilPublicoScreen';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -64,7 +65,7 @@ export default function MainNavigator() {
       {/* Punto 2 - perfil */}
       <Stack.Screen name="Perfil" component={PerfilScreen} options={{ title: 'Mi perfil' }} />
       <Stack.Screen name="EditarPerfil" component={EditarPerfilScreen} options={{ title: 'Editar mis datos' }} />
-      <Stack.Screen name="PerfilPublico" component={pantallaPendiente('Perfil publico', 2)} options={{ title: 'Perfil' }} />
+      <Stack.Screen name="PerfilPublico" component={PerfilPublicoScreen} options={{ title: 'Perfil' }} />
       <Stack.Screen name="Configuracion" component={ConfiguracionScreen} options={{ title: 'Configuracion' }} />
 
       {/* Punto 7 - reclamos */}
