@@ -126,7 +126,11 @@ export default function PerfilScreen({ navigation }) {
       <Text style={styles.seccion}>Reputación</Text>
       <View style={styles.tarjeta}>
         {perfil ? (
-          <ReputacionPerfil reputacion={perfil.reputacion} />
+          <ReputacionPerfil
+            reputacion={perfil.reputacion}
+            insignias={perfil.insignias}
+            mostrarPendientes
+          />
         ) : errorPerfil ? (
           <>
             <Aviso mensaje={errorPerfil} />

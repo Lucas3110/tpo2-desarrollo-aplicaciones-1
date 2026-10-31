@@ -35,7 +35,7 @@ export function datosDe(usuario) {
 
 // GET /hallado/usuarios/:id/perfil
 //
-// La reputación de la persona. Sin teléfono ni
+// La reputación y las insignias (con su progreso). Sin teléfono ni
 // publicaciones: es lo que ve cualquiera, también para el perfil propio.
 export async function obtenerPerfilPublico(id) {
   const { data } = await apiClient.get(`/hallado/usuarios/${id}/perfil`);
