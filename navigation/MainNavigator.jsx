@@ -4,7 +4,6 @@
 // existen quedan apuntando a pantallaPendiente(), asi el que necesita
 // navegar hacia una pantalla ajena puede hacerlo hoy sin esperar a nadie:
 // cuando el otro mergee, se cambia el component y nada mas.
-import { Text, TouchableOpacity } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BuscadorScreen from '../screens/buscador/BuscadorScreen';
 import ConfiguracionScreen from '../screens/configuracion/ConfiguracionScreen';
@@ -24,6 +23,7 @@ import PerfilPublicoScreen from '../screens/perfil/PerfilPublicoScreen';
 import MisAlertasScreen from '../screens/alertas/MisAlertasScreen';
 import AlertaResultadosScreen from '../screens/alertas/AlertaResultadosScreen';
 import SeguidasScreen from '../screens/seguidas/SeguidasScreen';
+import BotonMenu from '../components/BotonMenu';
 import { pantallaPendiente } from '../components/PantallaPendiente';
 import { colors } from '../config/theme';
 
@@ -47,12 +47,9 @@ export default function MainNavigator() {
         options={({ navigation }) => ({
           title: 'Hallado',
           // El enunciado pide que al entrar se vea el buscador y nada mas,
-          // asi que el resto de la app cuelga de este boton.
-          headerRight: () => (
-            <TouchableOpacity onPress={() => navigation.navigate('Menu')} hitSlop={12}>
-              <Text style={{ color: colors.white, fontSize: 15, fontWeight: 'bold' }}>Menu</Text>
-            </TouchableOpacity>
-          ),
+          // asi que el resto de la app cuelga de este boton. El punto de
+          // novedad (punto 9) lo prende BuscadorScreen cuando toma foco.
+          headerRight: () => <BotonMenu onPress={() => navigation.navigate('Menu')} />,
         })}
       />
       <Stack.Screen name="Menu" component={MenuScreen} options={{ title: 'Menu' }} />
