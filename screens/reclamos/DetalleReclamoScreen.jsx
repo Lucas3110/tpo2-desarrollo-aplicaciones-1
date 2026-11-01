@@ -263,6 +263,11 @@ export default function DetalleReclamoScreen({ navigation, route }) {
           <Contacto reclamo={reclamo} />
           <View style={styles.botones}>
             <Boton
+              titulo="Punto de encuentro"
+              onPress={() => navigation.navigate('PuntoDeEncuentro', { reclamoId: reclamo.id })}
+              variante="secundario"
+            />
+            <Boton
               titulo="Ver la publicación"
               onPress={() => navigation.navigate('DetallePublicacion', { id: publicacion.id })}
               variante="secundario"
