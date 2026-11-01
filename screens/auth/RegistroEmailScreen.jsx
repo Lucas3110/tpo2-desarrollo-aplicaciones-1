@@ -54,6 +54,7 @@ export default function RegistroEmailScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
+        <Text style={styles.paso}>Paso 1 de 3</Text>
         <Text style={styles.titulo}>Crear cuenta</Text>
         <Text style={styles.bajada}>
           Te vamos a mandar un código para confirmar que el email es tuyo.
@@ -97,6 +98,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: spacing.xl,
+  },
+  paso: {
+    fontSize: fontSizes.xs,
+    fontWeight: 'bold',
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
   },
   titulo: {
     fontSize: fontSizes.xl,

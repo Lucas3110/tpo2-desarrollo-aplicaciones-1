@@ -8,6 +8,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegistroEmailScreen from '../screens/auth/RegistroEmailScreen';
 import VerificarCodigoScreen from '../screens/auth/VerificarCodigoScreen';
+import CrearCuentaScreen from '../screens/auth/CrearCuentaScreen';
 import RecuperarPasswordScreen from '../screens/auth/RecuperarPasswordScreen';
 
 const Stack = createNativeStackNavigator();
@@ -18,6 +19,7 @@ export default function AuthNavigator() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Registro" component={RegistroEmailScreen} />
       <Stack.Screen name="VerificarCodigo" component={VerificarCodigoScreen} />
+      <Stack.Screen name="CrearCuenta" component={CrearCuentaScreen} />
       <Stack.Screen name="RecuperarPassword" component={RecuperarPasswordScreen} />
     </Stack.Navigator>
   );
