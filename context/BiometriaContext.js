@@ -41,7 +41,17 @@ export function BiometriaProvider({ children }) {
   const [disponible, setDisponible] = useState(false);
   const [activada, setActivada] = useState(false);
   const [bloqueada, setBloqueada] = useState(false);
-  const [cargando, setCargando] = useState(true);
+
+  // Dos cargas distintas: lo que tiene el TELÉFONO (lector, huellas
+  // registradas) se averigua una vez, y lo que eligió LA CUENTA se vuelve a
+  // leer cada vez que cambia el usuario.
+  //
+  // Las dos tienen que estar listas antes de decidir si se bloquea. Si se
+  // decidiera con la preferencia a medio leer, una sesión guardada con la
+  // huella activada no se bloquearía al abrir la app.
+  const [cargandoDispositivo, setCargandoDispositivo] = useState(true);
+  const [cargandoPreferencia, setCargandoPreferencia] = useState(true);
+  const cargando = cargandoDispositivo || cargandoPreferencia;
 
   // Para saber si ya pasamos el arranque. Un ref y no un estado: cambiarlo no
   // tiene que provocar un render.
@@ -63,6 +73,7 @@ export function BiometriaProvider({ children }) {
   // en la mitad de la carga de una publicación.
   const dialogoDelSistema = useRef(false);
 
+  // Lo del dispositivo: no depende de quién esté logueado.
   useEffect(() => {
     const averiguar = async () => {
       try {
@@ -71,13 +82,33 @@ export function BiometriaProvider({ children }) {
           LocalAuthentication.isEnrolledAsync(),
         ]);
         setDisponible(hardware && enrolada);
-        setActivada(await leerBiometriaActivada());
       } finally {
-        setCargando(false);
+        setCargandoDispositivo(false);
       }
     };
     averiguar();
   }, []);
+
+  // La preferencia: es de la cuenta. Se relee al cambiar de usuario, así
+  // nadie hereda lo que eligió el anterior en este teléfono.
+  useEffect(() => {
+    let vigente = true;
+    setCargandoPreferencia(true);
+
+    leerBiometriaActivada(usuario?.id)
+      .then((valor) => {
+        if (vigente) setActivada(valor);
+      })
+      .finally(() => {
+        if (vigente) setCargandoPreferencia(false);
+      });
+
+    // Si el usuario cambia otra vez antes de que termine esta lectura, la
+    // respuesta vieja no tiene que pisar la nueva.
+    return () => {
+      vigente = false;
+    };
+  }, [usuario?.id]);
 
   // Decide si hay que bloquear cuando termina de restaurarse la sesión.
   useEffect(() => {
@@ -151,7 +182,7 @@ export function BiometriaProvider({ children }) {
   const activar = async () => {
     const ok = await pedirHuella('Confirmá tu identidad para activar el desbloqueo');
     if (!ok) return false;
-    await guardarBiometriaActivada(true);
+    await guardarBiometriaActivada(usuario?.id, true);
     setActivada(true);
     return true;
   };
@@ -159,7 +190,7 @@ export function BiometriaProvider({ children }) {
   // Desactivar no pide nada: para llegar a configuración ya hubo que entrar a
   // la app, así que la huella ya se validó.
   const desactivar = async () => {
-    await guardarBiometriaActivada(false);
+    await guardarBiometriaActivada(usuario?.id, false);
     setActivada(false);
     setBloqueada(false);
   };
