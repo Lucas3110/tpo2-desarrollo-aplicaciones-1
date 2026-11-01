@@ -91,7 +91,7 @@ export default function LoginScreen({ navigation }) {
 
         <CampoTexto
           etiqueta="Email"
-          placeholder="vos@ejemplo.com"
+          placeholder="email@ejemplo.com"
           value={email}
           onChangeText={setEmail}
           error={errores.email}
