@@ -28,7 +28,11 @@ import {
   obtenerCategorias,
 } from '../../services/publicacionService';
 import { crearAlerta } from '../../services/alertaService';
+import { ubicacionActual } from '../../services/ubicacionService';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
+
+// Cuánto queda en pantalla el cartel de "guardamos la alerta".
+const MS_AVISO_ALERTA = 3000;
 
 const CUANDO = [
   { valor: null, etiqueta: 'Cualquier fecha' },
@@ -61,6 +65,7 @@ export default function ResultadosScreen({ navigation, route }) {
   // Punto 9: guardar la búsqueda como alerta. El aviso de confirmación es
   // de esta búsqueda: si se ajustan los filtros, ya es otra y se borra.
   const [guardandoAlerta, setGuardandoAlerta] = useState(false);
+  const [pidiendoUbicacion, setPidiendoUbicacion] = useState(false);
   const [avisoAlerta, setAvisoAlerta] = useState(null);
 
   const [panelAbierto, setPanelAbierto] = useState(false);
@@ -115,6 +120,16 @@ export default function ResultadosScreen({ navigation, route }) {
     setAvisoAlerta(null);
   }, [criterios, buscar]);
 
+  // El aviso de la alerta se va solo. Es una confirmación de algo que ya
+  // pasó, no un estado de la pantalla: dejarlo fijo arriba de los
+  // resultados ocupa lugar para siempre por algo que se lee una vez.
+  // Mismo criterio que el cartel de sesión vencida.
+  useEffect(() => {
+    if (avisoAlerta === null) return;
+    const id = setTimeout(() => setAvisoAlerta(null), MS_AVISO_ALERTA);
+    return () => clearTimeout(id);
+  }, [avisoAlerta]);
+
   async function guardarAlerta() {
     setGuardandoAlerta(true);
     setAvisoAlerta(null);
@@ -142,6 +157,31 @@ export default function ResultadosScreen({ navigation, route }) {
     });
   }
 
+  // Ordenar por cercanía necesita coordenadas. Si no las tenemos, se piden
+  // acá mismo en vez de esconder el botón: el enunciado promete el orden y
+  // la persona tiene que poder llegar a él desde los resultados.
+  async function ordenarPorCercania() {
+    if (criterios.orden === 'CERCANOS') return;
+
+    if (criterios.coordenadas) {
+      setCriterios({ ...criterios, orden: 'CERCANOS' });
+      return;
+    }
+
+    setPidiendoUbicacion(true);
+    setError(null);
+    try {
+      const punto = await ubicacionActual();
+      setCriterios({ ...criterios, coordenadas: punto, orden: 'CERCANOS' });
+    } catch (e) {
+      // Negar el permiso no es un error de la app: se cuenta y se sigue con
+      // el orden por fecha, que es el que ya estaba.
+      setError(e.message);
+    } finally {
+      setPidiendoUbicacion(false);
+    }
+  }
+
   function cambiarOrden(orden) {
     // Ordenar por cercanía sin coordenadas lo rechaza el backend, así que
     // ni se ofrece: el botón aparece sólo si hay de dónde medir.
@@ -161,6 +201,10 @@ export default function ResultadosScreen({ navigation, route }) {
   // pantalla algo util a alguien que no hizo nada malo.
   const recargando = cargando && !refrescando;
 
+  // Con cero resultados la pantalla cambia bastante: no hay nada que
+  // ordenar ni que ajustar desde la barra.
+  const hayResultados = publicaciones !== null && publicaciones.length > 0;
+
   // ---------------------------------------------------------------
 
   if (publicaciones === null) {
@@ -177,6 +221,7 @@ export default function ResultadosScreen({ navigation, route }) {
         criterios={criterios}
         etiquetas={etiquetas}
         total={paginado?.total}
+        hayResultados={hayResultados}
         guardandoAlerta={guardandoAlerta}
         onGuardarAlerta={guardarAlerta}
       />
@@ -187,6 +232,10 @@ export default function ResultadosScreen({ navigation, route }) {
         </View>
       ) : null}
 
+      {/* Sin resultados la barra no tiene sentido: no hay nada que ordenar y
+          "Ajustar" sería el único botón de una fila entera. El estado vacío
+          ya ofrece "Probar con otros filtros", que abre el mismo panel. */}
+      {hayResultados ? (
       <View style={styles.barra}>
         <TouchableOpacity
           style={styles.botonBarra}
@@ -212,12 +261,20 @@ export default function ResultadosScreen({ navigation, route }) {
             </Text>
           </TouchableOpacity>
 
-          {hayCoordenadas ? (
-            <TouchableOpacity
-              style={[styles.orden, criterios.orden === 'CERCANOS' ? styles.ordenActivo : null]}
-              onPress={() => cambiarOrden('CERCANOS')}
-              activeOpacity={0.7}
-            >
+          {/* "Cercanos" se muestra SIEMPRE. Antes aparecía sólo si habías
+              compartido la ubicación, y desaparecer no se entiende: el
+              enunciado promete ordenar "por más recientes o más cercanos" y
+              la mitad de eso no estaba. Si no hay coordenadas, tocarlo las
+              pide; si las negás, queda el aviso y seguís con Recientes. */}
+          <TouchableOpacity
+            style={[styles.orden, criterios.orden === 'CERCANOS' ? styles.ordenActivo : null]}
+            onPress={ordenarPorCercania}
+            disabled={pidiendoUbicacion}
+            activeOpacity={0.7}
+          >
+            {pidiendoUbicacion ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
               <Text
                 style={[
                   styles.textoOrden,
@@ -226,10 +283,11 @@ export default function ResultadosScreen({ navigation, route }) {
               >
                 Cercanos
               </Text>
-            </TouchableOpacity>
-          ) : null}
+            )}
+          </TouchableOpacity>
         </View>
       </View>
+      ) : null}
 
       {error ? (
         <View style={styles.avisoError}>
@@ -313,7 +371,7 @@ function nombreDe(opciones, id, anterior) {
   return opciones.find((o) => o.id === id)?.nombre ?? anterior ?? null;
 }
 
-function Resumen({ criterios, etiquetas, total, guardandoAlerta, onGuardarAlerta }) {
+function Resumen({ criterios, etiquetas, total, hayResultados, guardandoAlerta, onGuardarAlerta }) {
   // Se arma con lo que la persona eligió, no con los códigos internos.
   const partes = [];
   partes.push(criterios.queTePaso === 'PERDI' ? 'Lo que otros encontraron' : 'Lo que otros perdieron');
@@ -326,15 +384,21 @@ function Resumen({ criterios, etiquetas, total, guardandoAlerta, onGuardarAlerta
     <View style={styles.resumen}>
       <View style={styles.resumenDatos}>
         <Text style={styles.resumenTexto}>{partes.join(' · ')}</Text>
-        {total !== undefined ? (
+        {/* El cero no se escribe: abajo ya dice "No encontramos nada", y
+            leer las dos cosas una arriba de la otra sobra. */}
+        {total ? (
           <Text style={styles.resumenTotal}>
-            {total === 0 ? 'Sin resultados' : `${total} ${total === 1 ? 'resultado' : 'resultados'}`}
+            {`${total} ${total === 1 ? 'resultado' : 'resultados'}`}
           </Text>
         ) : null}
       </View>
 
       {/* "Cualquier búsqueda puede guardarse como alerta": también las que
-          traen resultados, no sólo las vacías. */}
+          traen resultados, no sólo las vacías. Por eso el enlace vive acá.
+          Pero cuando NO hay resultados se esconde: ahí abajo ya está
+          "Avisarme si aparece", que hace exactamente lo mismo, y tener los
+          dos botones a la vez confunde. */}
+      {hayResultados ? (
       <TouchableOpacity onPress={onGuardarAlerta} disabled={guardandoAlerta} hitSlop={8}>
         {guardandoAlerta ? (
           <ActivityIndicator color={colors.primary} />
@@ -342,6 +406,7 @@ function Resumen({ criterios, etiquetas, total, guardandoAlerta, onGuardarAlerta
           <Text style={styles.enlace}>Guardar alerta</Text>
         )}
       </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -571,11 +636,13 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
   },
+  // Bastante aire antes de los botones: pegado al texto parecía parte del
+  // mismo bloque y se leía mal.
   vacioTexto: {
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xl * 2,
   },
   vacioBotones: {
     width: '100%',

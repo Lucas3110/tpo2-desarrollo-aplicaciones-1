@@ -30,6 +30,12 @@ import {
 } from '../../utils/validaciones';
 import { colors, fontSizes, spacing } from '../../config/theme';
 
+// Cuánto se ve el "cuenta creada" antes de entrar a la app. Lo suficiente
+// para leerlo, no tanto como para que parezca que se colgó.
+const MS_AVISO_CUENTA_CREADA = 1200;
+
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
+
 export default function VerificarCodigoScreen({ navigation, route }) {
   const { email } = route.params;
   const { iniciarSesion } = useAuth();
@@ -65,12 +71,24 @@ export default function VerificarCodigoScreen({ navigation, route }) {
         nombre: nombre.trim(),
         password,
       });
+      // Antes de entrar, confirmar que la cuenta quedó creada.
+      //
+      // Sin esto la pantalla se cambiaba sola por el buscador y no quedaba
+      // claro si se había creado la cuenta o si te había devuelto al inicio
+      // por un error. Es el único momento del registro sin respuesta
+      // visible, y justo el que más tranquiliza.
+      //
+      // El botón sigue en "cargando" durante la pausa: así nadie lo toca de
+      // nuevo creyendo que no pasó nada.
+      setAviso('¡Listo! Tu cuenta quedó creada. Entrando…');
+      await esperar(MS_AVISO_CUENTA_CREADA);
+
       // Esto deja la sesión guardada y hace que RootNavigator pase solo a la
       // app: no hay que navegar a mano.
       await iniciarSesion(sesion.token, sesion.usuario);
     } catch (e) {
       setErrorPedido(e.message);
-    } finally {
+      setAviso(null);
       setEnviando(false);
     }
   };
