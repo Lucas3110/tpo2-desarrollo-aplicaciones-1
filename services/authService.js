@@ -29,16 +29,34 @@ export async function solicitarRegistro(email) {
 // { token, usuario } y la sesión queda abierta, así no hay que loguearse
 // justo después de registrarse.
 //
-// El backend valida el nombre y la contraseña ANTES de consumir el código,
-// así que si alguno está mal el código sigue sirviendo y se puede corregir
-// sin pedir otro.
-export async function confirmarRegistro({ email, codigo, nombre, password }) {
+// El backend valida el nombre y la contraseña ANTES de dar por buena la
+// identidad, así que si alguno está mal el ticket sigue sirviendo y se
+// puede corregir sin pedir otro código.
+export async function confirmarRegistro({ email, ticket, nombre, password }) {
   const { data } = await apiClient.post('/auth/registro/confirmar', {
     email,
-    codigo,
+    ticket,
     nombre,
     password,
   });
+  return data;
+}
+
+// POST /auth/registro/verificar
+//
+// Paso 2 de 3: confirmar que el código es el correcto, y nada más.
+//
+// Un OTP se consume al verificarlo, así que no alcanza con "mirar si está
+// bien": el backend lo cambia por un ticket corto, que es la prueba de que
+// el email es tuyo. Ese ticket es lo que después viaja con el nombre y la
+// contraseña.
+//
+// Gracias a esto el código puede tener su propia pantalla: un código mal
+// escrito se avisa en el momento y no después de llenar el formulario.
+//
+// Devuelve { ticket, expiraEnMinutos }.
+export async function verificarCodigoDeRegistro({ email, codigo }) {
+  const { data } = await apiClient.post('/auth/registro/verificar', { email, codigo });
   return data;
 }
 
@@ -92,11 +110,25 @@ export async function recuperarPassword(email) {
 //
 // El backend valida la contrasena ANTES de consumir el codigo, asi que si es
 // corta el codigo sigue sirviendo.
-export async function restablecerPassword({ email, codigo, password }) {
+export async function restablecerPassword({ email, ticket, password }) {
   const { data } = await apiClient.post('/auth/password/restablecer', {
     email,
-    codigo,
+    ticket,
     password,
   });
+  return data;
+}
+
+// POST /auth/password/verificar
+//
+// Paso 2 de 3 del recupero: confirmar que el código es el correcto, y nada
+// más. Igual que en el registro, el backend lo cambia por un ticket corto.
+//
+// Es lo que permite que el código tenga su propia pantalla: si está mal se
+// avisa en el momento, sin haber tipeado la contraseña nueva.
+//
+// Devuelve { ticket, expiraEnMinutos }.
+export async function verificarCodigoDeRecupero({ email, codigo }) {
+  const { data } = await apiClient.post('/auth/password/verificar', { email, codigo });
   return data;
 }

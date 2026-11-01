@@ -1,10 +1,22 @@
-// Punto 1, paso 2 del registro: confirmar el código y definir la contraseña.
+// Punto 1, paso 2 del registro: confirmar el código y nada más.
 //
-// El código, el nombre y la contraseña van en la misma pantalla a propósito.
-// El enunciado los agrupa ("confirmarlo y definir una contraseña") y hay una
-// razón práctica: el backend consume el código y guarda los datos en el mismo
-// pedido, así que si estuvieran en pantallas separadas la persona tipearía
-// nombre y contraseña para enterarse después de que el código estaba mal.
+// "Registro: solicitar email -> recibir un código de validación (OTP) ->
+// confirmarlo y definir una contraseña."
+//
+// Antes el código, el nombre y la contraseña estaban todos acá. Tenía una
+// razón: el backend consumía el código y guardaba los datos en el MISMO
+// pedido, así que no había forma de validar el código por separado sin
+// gastarlo. El costo era feo: escribías el código mal y te enterabas recién
+// después de haber llenado el formulario entero.
+//
+// Ahora el backend cambia el código por un "ticket" corto
+// (POST /auth/registro/verificar). Eso permite que el código tenga su propia
+// pantalla y se avise en el momento, y que el nombre y la contraseña se
+// elijan después, con calma, en CrearCuentaScreen.
+//
+// El ticket viaja por los params de navegación, igual que el email. No es un
+// secreto que haya que persistir: dura quince minutos y sólo sirve para
+// terminar ESTE registro.
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -18,46 +30,22 @@ import {
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
-import { useAuth } from '../../hooks/useAuth';
-import { confirmarRegistro, solicitarRegistro } from '../../services/authService';
-import {
-  LIMITES,
-  validarCodigo,
-  validarFormulario,
-  validarNombre,
-  validarPassword,
-  validarRepeticionPassword,
-} from '../../utils/validaciones';
+import { solicitarRegistro, verificarCodigoDeRegistro } from '../../services/authService';
+import { LIMITES, validarCodigo, validarFormulario } from '../../utils/validaciones';
 import { colors, fontSizes, spacing } from '../../config/theme';
-
-// Cuánto se ve el "cuenta creada" antes de entrar a la app. Lo suficiente
-// para leerlo, no tanto como para que parezca que se colgó.
-const MS_AVISO_CUENTA_CREADA = 1200;
-
-const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 
 export default function VerificarCodigoScreen({ navigation, route }) {
   const { email } = route.params;
-  const { iniciarSesion } = useAuth();
 
   const [codigo, setCodigo] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [password, setPassword] = useState('');
-  const [repeticion, setRepeticion] = useState('');
-
   const [errores, setErrores] = useState({});
   const [errorPedido, setErrorPedido] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
 
-  const confirmar = async () => {
-    const encontrados = validarFormulario({
-      codigo: validarCodigo(codigo),
-      nombre: validarNombre(nombre),
-      password: validarPassword(password),
-      repeticion: validarRepeticionPassword(password, repeticion),
-    });
+  const verificar = async () => {
+    const encontrados = validarFormulario({ codigo: validarCodigo(codigo) });
     setErrores(encontrados);
     setErrorPedido(null);
     setAviso(null);
@@ -65,30 +53,16 @@ export default function VerificarCodigoScreen({ navigation, route }) {
 
     setEnviando(true);
     try {
-      const sesion = await confirmarRegistro({
+      const { ticket } = await verificarCodigoDeRegistro({
         email,
         codigo: codigo.trim(),
-        nombre: nombre.trim(),
-        password,
       });
-      // Antes de entrar, confirmar que la cuenta quedó creada.
-      //
-      // Sin esto la pantalla se cambiaba sola por el buscador y no quedaba
-      // claro si se había creado la cuenta o si te había devuelto al inicio
-      // por un error. Es el único momento del registro sin respuesta
-      // visible, y justo el que más tranquiliza.
-      //
-      // El botón sigue en "cargando" durante la pausa: así nadie lo toca de
-      // nuevo creyendo que no pasó nada.
-      setAviso('¡Listo! Tu cuenta quedó creada. Entrando…');
-      await esperar(MS_AVISO_CUENTA_CREADA);
-
-      // Esto deja la sesión guardada y hace que RootNavigator pase solo a la
-      // app: no hay que navegar a mano.
-      await iniciarSesion(sesion.token, sesion.usuario);
+      // navigate y no replace: el "Volver" de la pantalla siguiente tiene que
+      // poder traerte de vuelta acá si querés reenviarte el código.
+      navigation.navigate('CrearCuenta', { email, ticket });
     } catch (e) {
       setErrorPedido(e.message);
-      setAviso(null);
+    } finally {
       setEnviando(false);
     }
   };
@@ -115,6 +89,7 @@ export default function VerificarCodigoScreen({ navigation, route }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
+        <Text style={styles.paso}>Paso 2 de 3</Text>
         <Text style={styles.titulo}>Confirmá tu email</Text>
         <Text style={styles.bajada}>
           Te mandamos un código de {LIMITES.LARGO_CODIGO} números al email que pusiste.
@@ -132,6 +107,8 @@ export default function VerificarCodigoScreen({ navigation, route }) {
           keyboardType="number-pad"
           maxLength={LIMITES.LARGO_CODIGO}
           autoComplete="one-time-code"
+          onSubmitEditing={verificar}
+          returnKeyType="done"
         />
 
         <View style={styles.reenvio}>
@@ -143,40 +120,7 @@ export default function VerificarCodigoScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.separador} />
-
-        <CampoTexto
-          etiqueta="Tu nombre"
-          placeholder="Como querés que te vean"
-          value={nombre}
-          onChangeText={setNombre}
-          error={errores.nombre}
-          maxLength={LIMITES.NOMBRE_MAX}
-          autoCapitalize="words"
-        />
-
-        <CampoTexto
-          etiqueta="Contraseña"
-          value={password}
-          onChangeText={setPassword}
-          error={errores.password}
-          ayuda={`Al menos ${LIMITES.PASSWORD_MIN} caracteres`}
-          secureTextEntry
-          autoCapitalize="none"
-        />
-
-        <CampoTexto
-          etiqueta="Repetí la contraseña"
-          value={repeticion}
-          onChangeText={setRepeticion}
-          error={errores.repeticion}
-          secureTextEntry
-          autoCapitalize="none"
-          onSubmitEditing={confirmar}
-          returnKeyType="done"
-        />
-
-        <Boton titulo="Crear mi cuenta" onPress={confirmar} cargando={enviando} />
+        <Boton titulo="Continuar" onPress={verificar} cargando={enviando} />
 
         <TouchableOpacity style={styles.volver} onPress={() => navigation.goBack()}>
           <Text style={styles.enlace}>Usar otro email</Text>
@@ -196,6 +140,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
   },
+  paso: {
+    fontSize: fontSizes.xs,
+    fontWeight: 'bold',
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
   titulo: {
     fontSize: fontSizes.lg,
     fontWeight: 'bold',
@@ -210,11 +161,6 @@ const styles = StyleSheet.create({
   reenvio: {
     flexDirection: 'row',
     gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  separador: {
-    height: 1,
-    backgroundColor: colors.border,
     marginBottom: spacing.lg,
   },
   textoPie: {
