@@ -11,9 +11,11 @@
 // Los pasos salen del enunciado: elegir el tipo, las fotos, los datos del
 // objeto, y el barrio y la dirección. El paso de verificación aparece sólo
 // en las de tipo ENCONTRE, porque la pregunta la carga quien encontró algo.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -260,6 +262,27 @@ export default function PublicarScreen({ navigation }) {
     setErrorPedido(null);
     setPaso(Math.max(0, paso - 1));
   }
+
+  // El boton de atras de Android tiene que retroceder un PASO, no salirse de
+  // la carga entera.
+  //
+  // Sin esto, estando en "Fotos" y tocando atras te sacaba al menu y perdias
+  // de vista el formulario: la navegacion no sabe nada de los seis pasos,
+  // para ella "Publicar" es una pantalla sola.
+  //
+  // Devolver true significa "ya lo manejamos yo". En el primer paso se
+  // devuelve false para que el back salga de Publicar, que es lo que se
+  // espera ahi. Lo que se habia cargado no se pierde: queda en el borrador.
+  useFocusEffect(
+    useCallback(() => {
+      const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (publicando || paso === 0) return false;
+        retroceder();
+        return true;
+      });
+      return () => suscripcion.remove();
+    }, [paso, publicando])
+  );
 
   async function publicar() {
     setPublicando(true);

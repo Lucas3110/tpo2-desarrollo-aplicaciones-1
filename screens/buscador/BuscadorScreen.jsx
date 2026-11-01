@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -164,6 +165,21 @@ export default function BuscadorScreen({ navigation }) {
 
     return malos;
   }
+
+  // El boton de atras de Android retrocede un PASO del buscador, igual que
+  // el enlace "Volver". En el primer paso no hace nada nuestro y sale de la
+  // app, que es lo que se espera en la pantalla de inicio.
+  useFocusEffect(
+    useCallback(() => {
+      const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (paso === 0) return false;
+        setErrores({});
+        setPaso(paso - 1);
+        return true;
+      });
+      return () => suscripcion.remove();
+    }, [paso])
+  );
 
   function avanzar() {
     const malos = validarPaso(pasoActual.clave);
@@ -394,7 +410,16 @@ export default function BuscadorScreen({ navigation }) {
         ) : null}
 
         <View style={styles.botones}>
-          <Boton titulo={esUltimo ? 'Buscar' : 'Continuar'} onPress={avanzar} />
+          {/* Sólo se deshabilita en el primer paso, que es el único con una
+              respuesta obligatoria. Los otros tres son opcionales según el
+              enunciado ("y, opcionalmente, palabras clave"), así que ahí el
+              botón tiene que estar activo aunque no hayas elegido nada: se
+              puede buscar sólo con "perdí algo". */}
+          <Boton
+            titulo={esUltimo ? 'Buscar' : 'Continuar'}
+            onPress={avanzar}
+            deshabilitado={pasoActual.clave === 'queTePaso' && queTePaso === null}
+          />
 
           {paso > 0 ? (
             <TouchableOpacity style={styles.volver} onPress={() => setPaso(paso - 1)}>

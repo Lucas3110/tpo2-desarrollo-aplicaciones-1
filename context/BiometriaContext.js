@@ -25,6 +25,7 @@ import { AppState } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '../hooks/useAuth';
 import { guardarBiometriaActivada, leerBiometriaActivada } from '../services/preferencias';
+import { registrarEnvoltorioDeDialogos } from '../services/dialogosDelSistema';
 
 // Cuánto esperamos, después de que el prompt se cierra, antes de volver a
 // escuchar los cambios de AppState. Ver el comentario de promptAbierto.
@@ -46,15 +47,21 @@ export function BiometriaProvider({ children }) {
   // tiene que provocar un render.
   const yaArranco = useRef(false);
 
-  // Mientras mostramos NUESTRO prompt de biometría hay que ignorar AppState.
+  // Mientras hay un diálogo DEL SISTEMA abierto hay que ignorar AppState.
   //
-  // Esto no es paranoia: Android manda la app a 'background' cuando aparece el
-  // BiometricPrompt. Sin esta bandera pasa lo siguiente, y lo vimos pasar:
-  // el prompt manda la app a background -> el listener bloquea la sesión ->
-  // aparece la pantalla de desbloqueo -> que pide la huella sola -> al
-  // cerrarse ese prompt vuelve a mandar background -> bloquea otra vez. La app
-  // queda pidiendo la huella para siempre, aunque la persona la pase bien.
-  const promptAbierto = useRef(false);
+  // Android manda la app a 'background' cuando aparece cualquiera de esos
+  // diálogos, y no son "la persona se fue de la app": sigue adentro del
+  // mismo flujo, eligiendo una foto o dándole permiso a algo.
+  //
+  // Con nuestro propio prompt de huella el efecto era un loop: el prompt
+  // manda a background -> el listener bloquea -> aparece la pantalla de
+  // desbloqueo -> que pide la huella sola -> al cerrarse ese prompt vuelve a
+  // mandar background -> bloquea otra vez.
+  //
+  // Con el selector de galería o el permiso de ubicación el efecto es otro y
+  // peor de explicar: elegís una foto y la app te pide la huella de la nada,
+  // en la mitad de la carga de una publicación.
+  const dialogoDelSistema = useRef(false);
 
   useEffect(() => {
     const averiguar = async () => {
@@ -91,7 +98,7 @@ export function BiometriaProvider({ children }) {
   useEffect(() => {
     const suscripcion = AppState.addEventListener('change', (estado) => {
       if (estado !== 'background') return;
-      if (promptAbierto.current) return; // es nuestro propio prompt, no la persona
+      if (dialogoDelSistema.current) return; // un diálogo, no la persona
       if (usuario !== null && activada && disponible) setBloqueada(true);
     });
     return () => suscripcion.remove();
@@ -102,26 +109,42 @@ export function BiometriaProvider({ children }) {
   // disableDeviceFallback en false a propósito: si la huella no se lee (dedo
   // mojado, lector sucio), el sistema ofrece el PIN del dispositivo. Sin eso,
   // unos cuantos rechazos dejan a la persona afuera.
-  const pedirHuella = async (mensaje) => {
-    promptAbierto.current = true;
+  // Corre algo que abre un diálogo del sistema sin que eso bloquee la sesión.
+  //
+  // Lo usa esta misma pantalla para el prompt de huella, y las pantallas que
+  // abren la galería o piden la ubicación. Es una función y no un par de
+  // "avisar que empieza / avisar que termina" para que no quede nunca
+  // prendida: el finally la apaga aunque lo de adentro explote.
+  const conDialogoDelSistema = async (hacer) => {
+    dialogoDelSistema.current = true;
     try {
+      return await hacer();
+    } finally {
+      // El evento de AppState del diálogo llega DESPUÉS de que la promesa
+      // resuelve, así que soltamos la bandera un toque más tarde. Si en ese
+      // segundo la persona manda la app a segundo plano a mano, no se
+      // bloquea: es un caso raro y el precio de que no se bloquee de más.
+      setTimeout(() => {
+        dialogoDelSistema.current = false;
+      }, MS_GRACIA_PROMPT);
+    }
+  };
+
+  // Los services que abren galería o piden ubicación avisan por acá, así
+  // ninguna pantalla tiene que acordarse de hacerlo.
+  useEffect(() => {
+    registrarEnvoltorioDeDialogos(conDialogoDelSistema);
+  }, []);
+
+  const pedirHuella = (mensaje) =>
+    conDialogoDelSistema(async () => {
       const resultado = await LocalAuthentication.authenticateAsync({
         promptMessage: mensaje,
         cancelLabel: 'Cancelar',
         disableDeviceFallback: false,
       });
       return resultado.success === true;
-    } finally {
-      // El evento de AppState del prompt llega DESPUÉS de que
-      // authenticateAsync resuelve, así que soltamos la bandera un toque más
-      // tarde. Si en ese segundo la persona manda la app a segundo plano a
-      // mano, no se bloquea — es un caso raro y el precio de que no entre en
-      // el loop.
-      setTimeout(() => {
-        promptAbierto.current = false;
-      }, MS_GRACIA_PROMPT);
-    }
-  };
+    });
 
   // Activar pide la huella primero: así la persona comprueba en el momento que
   // funciona, en vez de descubrir recién al abrir la app que quedó afuera.
@@ -149,7 +172,15 @@ export function BiometriaProvider({ children }) {
 
   return (
     <BiometriaContext.Provider
-      value={{ disponible, activada, bloqueada, cargando, activar, desactivar, desbloquear }}
+      value={{
+        disponible,
+        activada,
+        bloqueada,
+        cargando,
+        activar,
+        desactivar,
+        desbloquear,
+      }}
     >
       {children}
     </BiometriaContext.Provider>

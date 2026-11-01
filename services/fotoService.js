@@ -5,6 +5,7 @@
 // y que lo de cámara entra en una entrega posterior.
 import * as ImagePicker from 'expo-image-picker';
 import apiClient from './apiClient';
+import { conDialogoDelSistema } from './dialogosDelSistema';
 
 // Qué tan grande y con qué calidad pedimos la imagen.
 //
@@ -20,24 +21,30 @@ export const MAX_FOTOS = 8;
 //
 // Lanza un Error con mensaje legible si no dio permiso: ese caso hay que
 // contarlo, no tragarlo, porque si no parece que el botón está roto.
+// El permiso y el selector son dos diálogos del sistema, y los dos mandan la
+// app a segundo plano. Van adentro de conDialogoDelSistema para que eso no se
+// confunda con "la persona se fue" y dispare el bloqueo por huella en la
+// mitad de la carga. Ver services/dialogosDelSistema.js.
 export async function elegirDeGaleria(cuantasFaltan) {
-  const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permiso.granted) {
-    throw new Error(
-      'Necesitamos permiso para ver tus fotos. Podés dárselo desde los ajustes del teléfono.'
-    );
-  }
+  return conDialogoDelSistema(async () => {
+    const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permiso.granted) {
+      throw new Error(
+        'Necesitamos permiso para ver tus fotos. Podés dárselo desde los ajustes del teléfono.'
+      );
+    }
 
-  const resultado = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: CALIDAD,
-    base64: true,
-    allowsMultipleSelection: true,
-    selectionLimit: cuantasFaltan,
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: CALIDAD,
+      base64: true,
+      allowsMultipleSelection: true,
+      selectionLimit: cuantasFaltan,
+    });
+
+    if (resultado.canceled) return [];
+    return resultado.assets ?? [];
   });
-
-  if (resultado.canceled) return [];
-  return resultado.assets ?? [];
 }
 
 // POST /hallado/fotos

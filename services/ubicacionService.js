@@ -4,6 +4,7 @@
 // Las coordenadas no son un adorno: el punto 3 ordena los resultados por
 // cercanía con ellas, y el punto 8 abre el mapa con ellas.
 import * as Location from 'expo-location';
+import { conDialogoDelSistema } from './dialogosDelSistema';
 
 // Precisión Balanced y no Highest a propósito. Highest enciende el GPS y
 // puede tardar medio minuto a cielo abierto, más adentro de un edificio.
@@ -36,7 +37,14 @@ export async function ubicacionActual() {
     );
   }
 
-  const permiso = await Location.requestForegroundPermissionsAsync();
+  // El pedido de permiso es un diálogo del sistema y manda la app a segundo
+  // plano. Va envuelto para que eso no dispare el bloqueo por huella en la
+  // mitad del flujo. Sólo el pedido: la espera del GPS que viene después no
+  // abre ningún diálogo, y ahí irse de la app sí es irse de la app.
+  // Ver services/dialogosDelSistema.js.
+  const permiso = await conDialogoDelSistema(() =>
+    Location.requestForegroundPermissionsAsync()
+  );
   if (!permiso.granted) {
     throw new ErrorUbicacion(
       'Necesitamos permiso para usar tu ubicación. Podés escribir la dirección a mano.',
