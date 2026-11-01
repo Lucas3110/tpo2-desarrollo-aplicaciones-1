@@ -10,6 +10,8 @@ import RegistroEmailScreen from '../screens/auth/RegistroEmailScreen';
 import VerificarCodigoScreen from '../screens/auth/VerificarCodigoScreen';
 import CrearCuentaScreen from '../screens/auth/CrearCuentaScreen';
 import RecuperarPasswordScreen from '../screens/auth/RecuperarPasswordScreen';
+import VerificarCodigoRecuperoScreen from '../screens/auth/VerificarCodigoRecuperoScreen';
+import NuevaPasswordScreen from '../screens/auth/NuevaPasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -21,6 +23,8 @@ export default function AuthNavigator() {
       <Stack.Screen name="VerificarCodigo" component={VerificarCodigoScreen} />
       <Stack.Screen name="CrearCuenta" component={CrearCuentaScreen} />
       <Stack.Screen name="RecuperarPassword" component={RecuperarPasswordScreen} />
+      <Stack.Screen name="VerificarCodigoRecupero" component={VerificarCodigoRecuperoScreen} />
+      <Stack.Screen name="NuevaPassword" component={NuevaPasswordScreen} />
     </Stack.Navigator>
   );
 }

@@ -110,11 +110,25 @@ export async function recuperarPassword(email) {
 //
 // El backend valida la contrasena ANTES de consumir el codigo, asi que si es
 // corta el codigo sigue sirviendo.
-export async function restablecerPassword({ email, codigo, password }) {
+export async function restablecerPassword({ email, ticket, password }) {
   const { data } = await apiClient.post('/auth/password/restablecer', {
     email,
-    codigo,
+    ticket,
     password,
   });
+  return data;
+}
+
+// POST /auth/password/verificar
+//
+// Paso 2 de 3 del recupero: confirmar que el código es el correcto, y nada
+// más. Igual que en el registro, el backend lo cambia por un ticket corto.
+//
+// Es lo que permite que el código tenga su propia pantalla: si está mal se
+// avisa en el momento, sin haber tipeado la contraseña nueva.
+//
+// Devuelve { ticket, expiraEnMinutos }.
+export async function verificarCodigoDeRecupero({ email, codigo }) {
+  const { data } = await apiClient.post('/auth/password/verificar', { email, codigo });
   return data;
 }

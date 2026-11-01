@@ -1,15 +1,16 @@
-// Punto 1: recupero de contraseña.
+// Punto 1, paso 1 del recupero: a qué email mandamos el código.
 //
 // "Recibir un código por email para definir una nueva, con la posibilidad de
 // reenviarlo en caso de no haberlo recibido o de que haya expirado."
 //
-// Son dos pasos y los hacemos en una sola pantalla con un estado `paso`, en
-// vez de dos pantallas del navigator. La razón: el email tiene que seguir
-// siendo el mismo entre el pedido del código y el restablecimiento, y
-// teniéndolo en un solo componente no hay forma de que se desincronice.
+// El recupero sigue los mismos tres pasos que el registro, y por la misma
+// razón: un OTP se consume al verificarlo, así que antes el código tenía
+// que viajar junto con la contraseña nueva y los dos se pedían en la misma
+// pantalla. Con el ticket del backend el código se verifica solo, y si está
+// mal te enterás antes de tipear nada más.
 //
-// Ojo con el mensaje del paso 1: el backend contesta 200 exista o no el
-// email, para que nadie pueda averiguar quién tiene cuenta. Así que no
+// Ojo con el mensaje de esta pantalla: el backend contesta 200 exista o no
+// el email, para que nadie pueda averiguar quién tiene cuenta. Así que no
 // podemos afirmar "te lo mandamos" — decimos "si ese email tiene cuenta".
 import { useState } from 'react';
 import {
@@ -19,91 +20,36 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
 } from 'react-native';
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
-import { useAuth } from '../../hooks/useAuth';
-import { recuperarPassword, restablecerPassword } from '../../services/authService';
-import {
-  LIMITES,
-  validarCodigo,
-  validarEmail,
-  validarFormulario,
-  validarPassword,
-  validarRepeticionPassword,
-} from '../../utils/validaciones';
+import { recuperarPassword } from '../../services/authService';
+import { validarEmail } from '../../utils/validaciones';
 import { colors, fontSizes, spacing } from '../../config/theme';
 
 export default function RecuperarPasswordScreen({ navigation }) {
-  const { iniciarSesion } = useAuth();
-
-  const [paso, setPaso] = useState('email'); // 'email' | 'codigo'
   const [email, setEmail] = useState('');
-  const [codigo, setCodigo] = useState('');
-  const [password, setPassword] = useState('');
-  const [repeticion, setRepeticion] = useState('');
-
   const [errores, setErrores] = useState({});
   const [errorPedido, setErrorPedido] = useState(null);
-  const [aviso, setAviso] = useState(null);
-  const [trabajando, setTrabajando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
 
-  const pedirCodigo = async ({ esReenvio = false } = {}) => {
+  const pedirCodigo = async () => {
     const error = validarEmail(email);
     setErrores(error ? { email: error } : {});
     setErrorPedido(null);
-    setAviso(null);
     if (error) return;
 
     const emailLimpio = email.trim().toLowerCase();
 
-    setTrabajando(true);
+    setEnviando(true);
     try {
       await recuperarPassword(emailLimpio);
-      // Solo el reenvío avisa. En el primer envío la pantalla cambia de paso
-      // y la bajada ya dice "escribí el código que te llegó a tal mail", así
-      // que un cartel arriba repitiendo lo mismo es ruido.
-      //
-      // El reenvío sí lo necesita: ahí la pantalla no cambia, y sin el cartel
-      // tocar "Reenviar" no se nota.
-      if (esReenvio) {
-        setAviso('Te mandamos un código nuevo.');
-        setCodigo('');
-      }
-      setPaso('codigo');
+      navigation.navigate('VerificarCodigoRecupero', { email: emailLimpio });
     } catch (e) {
       setErrorPedido(e.message);
     } finally {
-      setTrabajando(false);
-    }
-  };
-
-  const restablecer = async () => {
-    const encontrados = validarFormulario({
-      codigo: validarCodigo(codigo),
-      password: validarPassword(password),
-      repeticion: validarRepeticionPassword(password, repeticion),
-    });
-    setErrores(encontrados);
-    setErrorPedido(null);
-    setAviso(null);
-    if (Object.keys(encontrados).length > 0) return;
-
-    setTrabajando(true);
-    try {
-      const sesion = await restablecerPassword({
-        email: email.trim().toLowerCase(),
-        codigo: codigo.trim(),
-        password,
-      });
-      // Deja la sesión abierta: RootNavigator pasa solo a la app.
-      await iniciarSesion(sesion.token, sesion.usuario);
-    } catch (e) {
-      setErrorPedido(e.message);
-    } finally {
-      setTrabajando(false);
+      setEnviando(false);
     }
   };
 
@@ -113,101 +59,31 @@ export default function RecuperarPasswordScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
+        <Text style={styles.paso}>Paso 1 de 3</Text>
         <Text style={styles.titulo}>Recuperar contraseña</Text>
         <Text style={styles.bajada}>
-          {paso === 'email'
-            ? 'Te mandamos un código al email de tu cuenta.'
-            : 'Escribí el código que te llegó al email de tu cuenta y elegí una contraseña nueva.'}
+          Decinos tu email y, si tiene una cuenta, te mandamos un código para elegir una
+          contraseña nueva.
         </Text>
 
         <Aviso mensaje={errorPedido} />
-        <Aviso mensaje={aviso} tipo="exito" />
 
-        {paso === 'email' ? (
-          <>
-            <CampoTexto
-              etiqueta="Email"
-              placeholder="vos@ejemplo.com"
-              value={email}
-              onChangeText={setEmail}
-              error={errores.email}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              autoComplete="email"
-              onSubmitEditing={() => pedirCodigo()}
-              returnKeyType="done"
-            />
+        <CampoTexto
+          etiqueta="Email"
+          placeholder="tunombre@email.com"
+          value={email}
+          onChangeText={setEmail}
+          error={errores.email}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          onSubmitEditing={pedirCodigo}
+          returnKeyType="done"
+        />
 
-            <Boton titulo="Enviarme el código" onPress={() => pedirCodigo()} cargando={trabajando} />
-          </>
-        ) : (
-          <>
-            <CampoTexto
-              etiqueta="Código"
-              placeholder="123456"
-              value={codigo}
-              onChangeText={setCodigo}
-              error={errores.codigo}
-              keyboardType="number-pad"
-              maxLength={LIMITES.LARGO_CODIGO}
-              autoComplete="one-time-code"
-            />
+        <Boton titulo="Mandarme el código" onPress={pedirCodigo} cargando={enviando} />
 
-            <View style={styles.reenvio}>
-              <Text style={styles.textoPie}>¿No te llegó?</Text>
-              <TouchableOpacity onPress={() => pedirCodigo({ esReenvio: true })} disabled={trabajando}>
-                <Text style={[styles.enlace, trabajando ? styles.enlaceInactivo : null]}>
-                  Reenviar
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.separador} />
-
-            <CampoTexto
-              etiqueta="Contraseña nueva"
-              value={password}
-              onChangeText={setPassword}
-              error={errores.password}
-              ayuda={`Al menos ${LIMITES.PASSWORD_MIN} caracteres`}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-
-            <CampoTexto
-              etiqueta="Repetí la contraseña"
-              value={repeticion}
-              onChangeText={setRepeticion}
-              error={errores.repeticion}
-              secureTextEntry
-              autoCapitalize="none"
-              onSubmitEditing={restablecer}
-              returnKeyType="done"
-            />
-
-            <Boton titulo="Guardar y entrar" onPress={restablecer} cargando={trabajando} />
-
-            <TouchableOpacity
-              style={styles.volver}
-              onPress={() => {
-                // Volver al paso del email sin arrastrar el estado del otro.
-                setPaso('email');
-                setCodigo('');
-                setPassword('');
-                setRepeticion('');
-                setErrores({});
-                setErrorPedido(null);
-                setAviso(null);
-                setCodigoDesarrollo(null);
-              }}
-            >
-              <Text style={styles.enlace}>Usar otro email</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        <TouchableOpacity style={styles.volver} onPress={() => navigation.navigate('Login')}>
+        <TouchableOpacity style={styles.volver} onPress={() => navigation.goBack()}>
           <Text style={styles.enlace}>Volver al ingreso</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -225,6 +101,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
   },
+  paso: {
+    fontSize: fontSizes.xs,
+    fontWeight: 'bold',
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
   titulo: {
     fontSize: fontSizes.lg,
     fontWeight: 'bold',
@@ -236,27 +119,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.lg,
   },
-  reenvio: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  separador: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginBottom: spacing.lg,
-  },
-  textoPie: {
-    fontSize: fontSizes.sm,
-    color: colors.textSecondary,
-  },
   enlace: {
     fontSize: fontSizes.sm,
     color: colors.primary,
     fontWeight: 'bold',
-  },
-  enlaceInactivo: {
-    opacity: 0.5,
   },
   volver: {
     alignItems: 'center',
