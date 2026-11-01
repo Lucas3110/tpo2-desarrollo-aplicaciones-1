@@ -70,7 +70,7 @@ export default function RecuperarPasswordScreen({ navigation }) {
 
         <CampoTexto
           etiqueta="Email"
-          placeholder="tunombre@email.com"
+          placeholder="email@ejemplo.com"
           value={email}
           onChangeText={setEmail}
           error={errores.email}
