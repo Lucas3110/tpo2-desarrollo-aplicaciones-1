@@ -43,5 +43,8 @@ yarn-error.*
 # IDE
 .idea/
 
-# Config local de cada dev (ver .env.example)
+# Config local de cada dev (ver .env.example). El .env* cubre tambien los
+# respaldos que uno deja al mano al probar otra URL (.env.respaldo y demas).
 .env
+.env.*
+!.env.example
