@@ -7,8 +7,28 @@
 // emergencia. Si la huella deja de leerse (dedo lastimado, lector roto) sin
 // esto la persona queda afuera de su propia cuenta para siempre. Cierra la
 // sesión y la manda al login, que es un camino que siempre funciona.
+//
+// ---------------------------------------------------------------
+// Por qué el pedido espera a que la app esté en primer plano
+// ---------------------------------------------------------------
+//
+// Esta pantalla se monta JUSTO cuando la app se va a segundo plano: ese es
+// el momento en que BiometriaContext bloquea la sesión. Y React sigue
+// corriendo un rato ahí atrás, así que el `useEffect` de montaje se ejecuta
+// con la actividad todavía sin resumir.
+//
+// Android no muestra el BiometricPrompt desde una actividad que no está en
+// primer plano. La llamada no falla: se queda colgada. La promesa nunca
+// resuelve, el botón queda girando para siempre y, como `pidiendoRef` sigue
+// en true, tocarlo tampoco hace nada. Quedaba que la única salida fuera
+// "Ingresar con mi contraseña".
+//
+// Por eso el pedido no sale del montaje sino de la primera vez que la app
+// está en primer plano. Una sola vez: si la persona cancela, queda el botón
+// para reintentar y puede llegar a la salida de emergencia. Volver a pedir
+// sola en cada vuelta al frente la dejaría atrapada en el diálogo.
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Boton from '../../components/Boton';
 import { useAuth } from '../../hooks/useAuth';
 import { useBiometria } from '../../hooks/useBiometria';
@@ -24,6 +44,9 @@ export default function DesbloqueoScreen() {
   // renderizar antes de que la persona conteste.
   const pidiendoRef = useRef(false);
 
+  // El pedido automático es uno solo por vez que se bloquea la sesión.
+  const yaPidioSolo = useRef(false);
+
   const intentar = async () => {
     if (pidiendoRef.current) return;
     pidiendoRef.current = true;
@@ -38,9 +61,22 @@ export default function DesbloqueoScreen() {
     }
   };
 
-  // Al aparecer, pide la huella sin esperar que toquen nada.
+  // Al aparecer, pide la huella sin esperar que toquen nada. Pero recién
+  // cuando la app está adelante: ver el comentario de arriba.
   useEffect(() => {
-    intentar();
+    const pedirUnaVez = () => {
+      if (yaPidioSolo.current) return;
+      if (AppState.currentState !== 'active') return;
+      yaPidioSolo.current = true;
+      intentar();
+    };
+
+    // Si ya está adelante (se bloqueó estando abierta), sale ahora mismo.
+    pedirUnaVez();
+
+    // Si no, queda esperando a que vuelva.
+    const suscripcion = AppState.addEventListener('change', pedirUnaVez);
+    return () => suscripcion.remove();
   }, []);
 
   return (
