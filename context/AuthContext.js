@@ -6,6 +6,7 @@
 import { createContext, useEffect, useRef, useState } from 'react';
 import { registrarCierreDeSesion } from '../services/apiClient';
 import { obtenerPerfil } from '../services/authService';
+import { limpiarCacheLectura } from '../services/offlineSyncService';
 import {
   borrarToken,
   borrarUsuario,
@@ -113,12 +114,19 @@ export function AuthProvider({ children }) {
   async function limpiar() {
     await borrarToken();
     await borrarUsuario();
+    // Punto 6: la caché de lectura de WatermelonDB guarda datos de quien
+    // navegó (por ejemplo `acciones.esPublicador`). Se borra al salir para que
+    // no se mezcle con la persona que entre después en el mismo teléfono.
+    await limpiarCacheLectura();
     setUsuario(null);
   }
 
   // La llaman el login y el registro cuando el backend devolvió token + usuario.
   const iniciarSesion = async (token, datosUsuario) => {
     olvidarCierre();
+    // Por si la sesión anterior terminó sin pasar por `limpiar` (app cerrada a
+    // la fuerza): arrancamos siempre con la caché vacía.
+    await limpiarCacheLectura();
     await guardarToken(token);
     await guardarUsuario(datosUsuario);
     setUsuario(datosUsuario);
