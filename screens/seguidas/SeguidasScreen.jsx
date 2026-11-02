@@ -22,13 +22,21 @@ import {
 import Aviso from '../../components/Aviso';
 import IndicadorNovedad from '../../components/IndicadorNovedad';
 import TarjetaResultado from '../../components/TarjetaResultado';
+import { useAuth } from '../../hooks/useAuth';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import { conCopiaLocal } from '../../services/copiaLocal';
 import { misSeguidas } from '../../services/publicacionService';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import { describirEstado } from '../../utils/publicaciones';
 import { colors, fontSizes, spacing } from '../../config/theme';
 
 export default function SeguidasScreen({ navigation }) {
+  const { usuario } = useAuth();
+  const { motivoOffline } = useNetworkState();
   // null hasta la primera carga; [] si no sigue nada.
   const [seguidas, setSeguidas] = useState(null);
+  // true si lo que se ve es la copia guardada y no lo último del servidor.
+  const [desdeCopia, setDesdeCopia] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [error, setError] = useState(null);
@@ -38,7 +46,13 @@ export default function SeguidasScreen({ navigation }) {
     if (!yaCargo.current && !esRefresco) setCargando(true);
     setError(null);
     try {
-      const respuesta = await misSeguidas();
+      // Sin conexión se muestra la última copia que cargó bien, con un aviso.
+      const { datos: respuesta, desdeCopia: esCopia } = await conCopiaLocal(
+        'seguidas',
+        usuario?.id,
+        misSeguidas
+      );
+      setDesdeCopia(esCopia);
       setSeguidas(respuesta.seguidas);
       yaCargo.current = true;
     } catch (e) {
@@ -77,6 +91,12 @@ export default function SeguidasScreen({ navigation }) {
 
   return (
     <View style={styles.pantalla}>
+      {desdeCopia ? (
+        <View style={styles.avisoError}>
+          <Aviso tipo="info" mensaje={TEXTOS.datosDesactualizados(motivoOffline)} />
+        </View>
+      ) : null}
+
       {error ? (
         <View style={styles.avisoError}>
           <Aviso mensaje={error} />

@@ -1,13 +1,11 @@
-// Punto 7: un reclamo completo, y la respuesta del publicador.
+// Punto 7 y Punto 6: un reclamo completo y la respuesta del publicador, con
+// bloqueo de acciones cuando no hay conexión.
 //
 // "El publicador puede aceptar o rechazar cada reclamo." Para decidir
 // necesita ver lo que mandó la otra persona: qué contestó a la pregunta de
 // verificación (y si coincidió), la descripción, la foto y, en "Lo
 // encontré", el barrio. Por eso esta pantalla muestra todo eso y recién
 // abajo los dos botones.
-//
-// Quien reclamó ve lo mismo, sin botones, con el estado y lo que sigue:
-// si lo aceptaron, que ya puede ver la dirección exacta en la publicación.
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -25,6 +23,8 @@ import {
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import { urlDeFoto } from '../../services/publicacionService';
 import { aceptarReclamo, obtenerReclamo, rechazarReclamo } from '../../services/reclamoService';
 import { isoATexto } from '../../utils/fechas';
@@ -39,6 +39,7 @@ const MOTIVO_MAX = 300;
 
 export default function DetalleReclamoScreen({ navigation, route }) {
   const { id } = route.params;
+  const { conectado, motivoOffline } = useNetworkState();
 
   const [reclamo, setReclamo] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -72,8 +73,7 @@ export default function DetalleReclamoScreen({ navigation, route }) {
   );
 
   function confirmarAceptar() {
-    // Aceptar cierra el caso y le muestra la dirección exacta a la otra
-    // persona: no se puede deshacer, así que se pregunta.
+    if (!conectado) return;
     Alert.alert(
       'Aceptar el reclamo',
       `${reclamo.reclamante.nombre} va a poder ver la dirección exacta de la publicación y los demás reclamos pendientes se van a rechazar. ¿Confirmás?`,
@@ -85,6 +85,7 @@ export default function DetalleReclamoScreen({ navigation, route }) {
   }
 
   async function aceptar() {
+    if (!conectado) return;
     setEnviando('aceptar');
     setError(null);
     try {
@@ -98,6 +99,7 @@ export default function DetalleReclamoScreen({ navigation, route }) {
   }
 
   async function rechazar() {
+    if (!conectado) return;
     if (motivo.length > MOTIVO_MAX) {
       setError(`El motivo puede tener hasta ${MOTIVO_MAX} caracteres`);
       return;
@@ -107,7 +109,9 @@ export default function DetalleReclamoScreen({ navigation, route }) {
     try {
       setReclamo(await rechazarReclamo(id, motivo.trim() || null));
       setRechazando(false);
-      setAviso('Reclamo rechazado. Si no queda otro pendiente, la publicación vuelve a estar abierta.');
+      setAviso(
+        'Reclamo rechazado. Si no queda otro pendiente, la publicación vuelve a estar abierta.'
+      );
     } catch (e) {
       setError(e.message);
     } finally {
@@ -213,6 +217,13 @@ export default function DetalleReclamoScreen({ navigation, route }) {
         <View style={styles.respuesta}>
           <Text style={styles.seccionTitulo}>Tu respuesta</Text>
 
+          {!conectado ? (
+            <Aviso
+              tipo="info"
+              mensaje={TEXTOS.necesitaConexion(motivoOffline, 'aceptar o rechazar este reclamo')}
+            />
+          ) : null}
+
           {rechazando ? (
             <>
               <CampoTexto
@@ -227,9 +238,13 @@ export default function DetalleReclamoScreen({ navigation, route }) {
                 titulo="Confirmar rechazo"
                 onPress={rechazar}
                 cargando={enviando === 'rechazar'}
-                deshabilitado={enviando !== null}
+                deshabilitado={!conectado || enviando !== null}
               />
-              <TouchableOpacity style={styles.volver} onPress={() => setRechazando(false)} disabled={enviando !== null}>
+              <TouchableOpacity
+                style={styles.volver}
+                onPress={() => setRechazando(false)}
+                disabled={enviando !== null}
+              >
                 <Text style={styles.enlace}>Cancelar</Text>
               </TouchableOpacity>
             </>
@@ -239,16 +254,18 @@ export default function DetalleReclamoScreen({ navigation, route }) {
                 titulo="Aceptar"
                 onPress={confirmarAceptar}
                 cargando={enviando === 'aceptar'}
-                deshabilitado={enviando !== null}
+                deshabilitado={!conectado || enviando !== null}
               />
               <Boton
                 titulo="Rechazar"
                 onPress={() => setRechazando(true)}
-                deshabilitado={enviando !== null}
+                deshabilitado={!conectado || enviando !== null}
                 variante="secundario"
               />
               <Text style={styles.nota}>
-                Si aceptás, {reclamo.reclamante.nombre} va a ver la dirección exacta y la publicación queda resuelta.
+                {!conectado
+                  ? TEXTOS.necesitaConexion(motivoOffline, 'continuar')
+                  : `Si aceptás, ${reclamo.reclamante.nombre} va a ver la dirección exacta y la publicación queda resuelta.`}
               </Text>
             </View>
           )}
@@ -265,6 +282,7 @@ export default function DetalleReclamoScreen({ navigation, route }) {
             <Boton
               titulo="Punto de encuentro"
               onPress={() => navigation.navigate('PuntoDeEncuentro', { reclamoId: reclamo.id })}
+              deshabilitado={!conectado}
               variante="secundario"
             />
             <Boton
@@ -283,15 +301,15 @@ export default function DetalleReclamoScreen({ navigation, route }) {
 
 function describirFechas(reclamo) {
   const enviado = `Enviado el ${isoATexto(String(reclamo.creadoEn).slice(0, 10))}`;
-  if (reclamo.estado === 'PENDIENTE') return `${enviado} · ${describirVencimiento(reclamo.horasParaVencer)}`;
+  if (reclamo.estado === 'PENDIENTE') {
+    return `${enviado} · ${describirVencimiento(reclamo.horasParaVencer)}`;
+  }
   if (reclamo.respondidoEn) {
     return `${enviado} · Respondido el ${isoATexto(String(reclamo.respondidoEn).slice(0, 10))}`;
   }
   return enviado;
 }
 
-// Punto 2: el teléfono de la otra parte, sólo si eligió mostrarlo. El
-// backend ya lo decide: si no corresponde, `contacto.telefono` viene null.
 function Contacto({ reclamo }) {
   if (!reclamo.contacto) return null;
   const otro = reclamo.soyElReclamante ? reclamo.publicador : reclamo.reclamante;

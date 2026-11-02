@@ -1,17 +1,23 @@
-// Punto 5: "Carga guiada en pasos".
+// Punto 5 y Punto 6: "Carga guiada en pasos", con cola de salida offline.
 //
 // Por qué un solo componente con un estado `paso` y no varias pantallas del
 // navigator: los pasos comparten TODO el formulario. Si cada paso fuera una
 // pantalla habría que ir pasando el borrador entero de una a otra por
 // route.params, que es exactamente el prop drilling del que hablamos en
 // clase. Acá el formulario vive en un lugar y los pasos sólo deciden qué
-// parte se muestra. Además deja el borrador (que viene en otra rama) en un
-// solo objeto, listo para guardar.
+// parte se muestra.
 //
 // Los pasos salen del enunciado: elegir el tipo, las fotos, los datos del
 // objeto, y el barrio y la dirección. El paso de verificación aparece sólo
 // en las de tipo ENCONTRE, porque la pregunta la carga quien encontró algo.
-import { useCallback, useEffect, useState } from 'react';
+//
+// Punto 6:
+// - Se apoya en `borradorService.js` mientras se completan los pasos.
+// - Si al tocar "Publicar" no hay red, `crearPublicacion` guarda la
+//   publicación en la tabla `publicaciones_pendientes` de WatermelonDB,
+//   limpia el borrador y `NetworkContext` la envía automáticamente a
+//   `POST /hallado/publicaciones` al recuperar la conexión.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -29,6 +35,10 @@ import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import PasosIndicador from '../../components/PasosIndicador';
 import SelectorFotos from '../../components/SelectorFotos';
+import SelectorLista from '../../components/SelectorLista';
+import SelectorOpciones from '../../components/SelectorOpciones';
+import { useAuth } from '../../hooks/useAuth';
+import { useNetworkState } from '../../hooks/useNetworkState';
 import {
   borrarBorrador,
   describirBorrador,
@@ -36,19 +46,16 @@ import {
   leerBorrador,
   valeLaPenaGuardar,
 } from '../../services/borradorService';
-import { useAuth } from '../../hooks/useAuth';
-import {
-  direccionDeCoordenadas,
-  formatearCoordenadas,
-  ubicacionActual,
-} from '../../services/ubicacionService';
-import SelectorLista from '../../components/SelectorLista';
-import SelectorOpciones from '../../components/SelectorOpciones';
 import {
   crearPublicacion,
   obtenerBarrios,
   obtenerCategorias,
 } from '../../services/publicacionService';
+import {
+  direccionDeCoordenadas,
+  formatearCoordenadas,
+  ubicacionActual,
+} from '../../services/ubicacionService';
 import {
   ATAJOS_FECHA,
   describirFecha,
@@ -57,6 +64,7 @@ import {
   isoDeHace,
   textoAIso,
 } from '../../utils/fechas';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 const TIPOS = [
@@ -74,8 +82,9 @@ const FRANJAS = [
 const TITULO_MAX = 80;
 const DESCRIPCION_MAX = 2000;
 
-export default function PublicarScreen({ navigation }) {
+export default function PublicarScreen({ navigation, route }) {
   const { usuario } = useAuth();
+  const { conectado, motivoOffline, refrescarContadorPendientes } = useNetworkState();
 
   // Catálogos
   const [categorias, setCategorias] = useState([]);
@@ -111,50 +120,135 @@ export default function PublicarScreen({ navigation }) {
   const [borradorPendiente, setBorradorPendiente] = useState(null);
   const [borradorListo, setBorradorListo] = useState(false);
 
-  useEffect(() => {
-    cargarCatalogos();
+  // Se guarda en un ref (y no se lee de `categorias.length`) para que
+  // `cargarCatalogos` tenga una identidad estable: si dependiera del largo de
+  // las listas, cambiaría al cargarlas y useFocusEffect volvería a dispararse.
+  const tieneCatalogos = useRef(false);
+
+  const cargarCatalogos = useCallback(async () => {
+    if (!tieneCatalogos.current) setCargandoCatalogos(true);
+    setErrorCatalogos(null);
+    try {
+      const [c, b] = await Promise.all([obtenerCategorias(), obtenerBarrios()]);
+      setCategorias(c);
+      setBarrios(b);
+      tieneCatalogos.current = c.length > 0 && b.length > 0;
+    } catch (e) {
+      // Si ya hay listas en pantalla se conservan; solo se avisa si no hay nada
+      // (primera vez sin conexión y sin copia guardada).
+      if (!tieneCatalogos.current) {
+        setErrorCatalogos(e.message);
+      }
+    } finally {
+      setCargandoCatalogos(false);
+    }
   }, []);
 
-  // Al entrar, miramos si quedo algo a medio cargar de la vez anterior. No se
-  // restaura solo: se le pregunta. Pisarle el formulario sin avisar es peor
-  // que perder el borrador, porque no hay forma de deshacerlo.
-  useEffect(() => {
-    const buscar = async () => {
-      const guardado = await leerBorrador(usuario?.id);
-      if (guardado) setBorradorPendiente(guardado);
-      setBorradorListo(true);
-    };
-    buscar();
-  }, [usuario?.id]);
+  useFocusEffect(
+    useCallback(() => {
+      cargarCatalogos();
+    }, [cargarCatalogos])
+  );
 
-  // Y cada vez que cambia algo, lo guardamos.
-  //
-  // Va despues de borradorListo a proposito: si guardaramos antes de haber
-  // leido, el formulario vacio del arranque pisaria el borrador viejo y la
-  // persona lo perderia justo al abrir la pantalla.
+  // Al recuperar la conexión se piden de nuevo las listas reales: las que había
+  // en pantalla pueden venir de la copia guardada y estar desactualizadas.
+  const estabaConectado = useRef(conectado);
+  useEffect(() => {
+    if (conectado && !estabaConectado.current) cargarCatalogos();
+    estabaConectado.current = conectado;
+  }, [conectado, cargarCatalogos]);
+
+  // Al entrar, miramos si quedó algo a medio cargar de la vez anterior. No se
+  // restaura solo: se le pregunta.
+  useFocusEffect(
+    useCallback(() => {
+      if (borradorListo) return;
+      const buscar = async () => {
+        const guardado = await leerBorrador(usuario?.id);
+        // Si llegó con `retomar` (viene de "Editar" en una publicación que el
+        // servidor rechazó), no se pregunta: el efecto de abajo lo carga directo.
+        if (guardado && !route?.params?.retomar) setBorradorPendiente(guardado);
+        setBorradorListo(true);
+      };
+      buscar();
+    }, [usuario?.id, borradorListo, route?.params?.retomar])
+  );
+
+  // "Editar" en Mis publicaciones deja la publicación rechazada como borrador y
+  // abre esta pantalla con `retomar`. Se carga en el formulario sin preguntar.
+  // Se mira el parámetro en un efecto (y no solo al enfocar) porque la pantalla
+  // puede estar ya abierta en la pila y entonces no se vuelve a montar.
+  useEffect(() => {
+    if (!route?.params?.retomar || !usuario?.id) return undefined;
+
+    let cancelado = false;
+    (async () => {
+      const guardado = await leerBorrador(usuario.id);
+      if (cancelado || !guardado) return;
+      aplicarBorrador(guardado.datos);
+      setBorradorPendiente(null);
+      setPublicada(null);
+      setErrores({});
+      setErrorPedido(null);
+      setBorradorListo(true);
+      navigation.setParams({ retomar: undefined });
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route?.params?.retomar, usuario?.id]);
+
+  // Y cada vez que cambia algo del formulario local, actualizamos el borrador.
   useEffect(() => {
     if (!borradorListo || publicada) return;
 
     const datos = formularioActual();
     if (valeLaPenaGuardar(datos)) guardarBorrador(usuario?.id, datos);
   }, [
-    borradorListo, publicada, usuario?.id,
-    tipo, fotos, categoriaId, titulo, descripcion,
-    fechaTexto, franja, barrioId, direccion, coordenadas, pregunta, respuesta,
+    borradorListo,
+    publicada,
+    usuario?.id,
+    tipo,
+    fotos,
+    categoriaId,
+    titulo,
+    descripcion,
+    fechaTexto,
+    franja,
+    barrioId,
+    direccion,
+    coordenadas,
+    pregunta,
+    respuesta,
+    paso,
   ]);
 
-  // Todo el formulario en un objeto. Sirve para guardar el borrador y para
-  // restaurarlo, asi no hay dos listas de campos que se puedan desincronizar.
   function formularioActual() {
     return {
-      tipo, fotos, categoriaId, titulo, descripcion,
-      fechaTexto, franja, barrioId, direccion, coordenadas, pregunta, respuesta,
+      tipo,
+      fotos,
+      categoriaId,
+      titulo,
+      descripcion,
+      fechaTexto,
+      franja,
+      barrioId,
+      direccion,
+      coordenadas,
+      pregunta,
+      respuesta,
       paso,
     };
   }
 
   function restaurarBorrador() {
-    const d = borradorPendiente.datos;
+    aplicarBorrador(borradorPendiente.datos);
+    setBorradorPendiente(null);
+  }
+
+  function aplicarBorrador(d) {
     setTipo(d.tipo ?? null);
     setFotos(d.fotos ?? []);
     setCategoriaId(d.categoriaId ?? null);
@@ -167,11 +261,8 @@ export default function PublicarScreen({ navigation }) {
     setCoordenadas(d.coordenadas ?? null);
     setPregunta(d.pregunta ?? '');
     setRespuesta(d.respuesta ?? '');
-    // El paso se acota por las dudas: si el borrador es viejo y la cantidad
-    // de pasos cambio, un indice guardado podria quedar fuera de rango.
     const total = d.tipo === 'ENCONTRE' ? 6 : 5;
     setPaso(Math.min(d.paso ?? 0, total - 1));
-    setBorradorPendiente(null);
   }
 
   async function descartarBorrador() {
@@ -179,24 +270,6 @@ export default function PublicarScreen({ navigation }) {
     setBorradorPendiente(null);
   }
 
-
-  async function cargarCatalogos() {
-    setCargandoCatalogos(true);
-    setErrorCatalogos(null);
-    try {
-      // En paralelo: son dos pedidos que no dependen entre sí.
-      const [c, b] = await Promise.all([obtenerCategorias(), obtenerBarrios()]);
-      setCategorias(c);
-      setBarrios(b);
-    } catch (e) {
-      setErrorCatalogos(e.message);
-    } finally {
-      setCargandoCatalogos(false);
-    }
-  }
-
-  // El paso de verificación sólo existe si encontró algo. Se calcula en vez
-  // de guardarse para que cambiar el tipo en el paso 1 reordene todo solo.
   const pasos = [
     { clave: 'tipo', titulo: '¿Qué te pasó?' },
     { clave: 'fotos', titulo: 'Fotos' },
@@ -208,7 +281,6 @@ export default function PublicarScreen({ navigation }) {
   const pasoActual = pasos[paso];
   const esUltimo = paso === pasos.length - 1;
 
-  // Cada paso dice qué está mal. Devuelve {} si está todo bien.
   function validarPaso(clave) {
     const malos = {};
 
@@ -250,7 +322,6 @@ export default function PublicarScreen({ navigation }) {
     setErrorPedido(null);
     if (Object.keys(malos).length > 0) return;
 
-    // Al salir del paso de la fecha, el texto pasa a ser la fecha de verdad.
     if (pasoActual.clave === 'cuando') setFechaIso(textoAIso(fechaTexto));
 
     if (esUltimo) publicar();
@@ -288,26 +359,38 @@ export default function PublicarScreen({ navigation }) {
     setPublicando(true);
     setErrorPedido(null);
     try {
-      const creada = await crearPublicacion({
-        tipo,
-        categoriaId,
-        titulo: titulo.trim(),
-        descripcion: descripcion.trim() || null,
-        fechaSuceso: textoAIso(fechaTexto),
-        franjaHoraria: franja,
-        barrioId,
-        direccion: direccion.trim() || null,
-        fotos,
-        ...(coordenadas ? { lat: coordenadas.lat, lng: coordenadas.lng } : {}),
-        // Sólo van en las de ENCONTRE: el backend rechaza una pérdida que las
-        // traiga, así que no se mandan "por las dudas".
-        ...(tipo === 'ENCONTRE'
-          ? { preguntaVerificacion: pregunta.trim(), respuestaVerificacion: respuesta.trim() }
-          : {}),
-      });
+      const barrioNombre = barrios.find((b) => b.id === barrioId)?.nombre ?? null;
+      const categoriaNombre = categorias.find((c) => c.id === categoriaId)?.nombre ?? null;
+
+      const creada = await crearPublicacion(
+        {
+          tipo,
+          categoriaId,
+          titulo: titulo.trim(),
+          descripcion: descripcion.trim() || null,
+          fechaSuceso: textoAIso(fechaTexto),
+          franjaHoraria: franja,
+          barrioId,
+          direccion: direccion.trim() || null,
+          fotos,
+          ...(coordenadas ? { lat: coordenadas.lat, lng: coordenadas.lng } : {}),
+          ...(tipo === 'ENCONTRE'
+            ? {
+                preguntaVerificacion: pregunta.trim(),
+                respuestaVerificacion: respuesta.trim(),
+              }
+            : {}),
+        },
+        {
+          usuarioId: usuario?.id,
+          barrioNombre,
+          categoriaNombre,
+        }
+      );
+
       setPublicada(creada);
-      // Ya se publico: el borrador no tiene mas razon de existir.
       await borrarBorrador(usuario?.id);
+      await refrescarContadorPendientes();
     } catch (e) {
       setErrorPedido(e.message);
     } finally {
@@ -315,7 +398,6 @@ export default function PublicarScreen({ navigation }) {
     }
   }
 
-  // Toma la ubicacion del dispositivo y, si puede, rellena la direccion.
   async function tomarUbicacion() {
     setErrorUbicacion(null);
     setUbicando(true);
@@ -323,9 +405,6 @@ export default function PublicarScreen({ navigation }) {
       const punto = await ubicacionActual();
       setCoordenadas(punto);
 
-      // La direccion escrita es un extra: si el geocoder no contesta, las
-      // coordenadas igual quedaron guardadas, que es lo que importa.
-      // Y no pisamos lo que la persona ya haya escrito.
       if (direccion.trim() === '') {
         const calle = await direccionDeCoordenadas(punto);
         if (calle) setDireccion(calle);
@@ -397,23 +476,44 @@ export default function PublicarScreen({ navigation }) {
   }
 
   if (publicada) {
+    const esPendiente = Boolean(publicada.pendienteDeEnvio);
+
     return (
       <View style={styles.centrado}>
-        <Text style={styles.exitoTitulo}>¡Listo!</Text>
-        <Text style={styles.exitoTexto}>
-          {publicada.tipo === 'PERDI'
-            ? 'Publicamos tu pérdida. Te avisamos si alguien encuentra algo parecido.'
-            : 'Publicamos tu hallazgo. Ojalá aparezca su dueño.'}
-        </Text>
-        <Text style={styles.exitoDetalle}>
-          {publicada.titulo} · {publicada.barrio.nombre}
-        </Text>
-        <Text style={styles.exitoDetalle}>
-          Vence el {isoATexto(String(publicada.venceEn).slice(0, 10))}
+        <Text style={[styles.exitoTitulo, esPendiente ? styles.pendienteTitulo : null]}>
+          {esPendiente ? 'Pendiente de envío' : '¡Listo!'}
         </Text>
 
+        {esPendiente ? (
+          <Aviso
+            tipo="info"
+            mensaje={TEXTOS.publicacionGuardada(publicada.causaEncolado)}
+          />
+        ) : (
+          <Text style={styles.exitoTexto}>
+            {publicada.tipo === 'PERDI'
+              ? 'Publicamos tu pérdida. Te avisamos si alguien encuentra algo parecido.'
+              : 'Publicamos tu hallazgo. Ojalá aparezca su dueño.'}
+          </Text>
+        )}
+
+        <Text style={styles.exitoDetalle}>
+          {publicada.titulo} · {publicada.barrio?.nombre ?? ''}
+        </Text>
+        {publicada.venceEn ? (
+          <Text style={styles.exitoDetalle}>
+            Vence el {isoATexto(String(publicada.venceEn).slice(0, 10))}
+          </Text>
+        ) : null}
+
         <View style={styles.exitoBotones}>
-          <Boton titulo="Ver mis publicaciones" onPress={() => navigation.navigate('MisPublicaciones')} />
+          <Boton
+            titulo="Ver mis publicaciones"
+            // `replace` y no `navigate`: si no, al volver con "atrás" desde Mis
+            // publicaciones aparecería otra vez esta confirmación, con un
+            // "Pendiente de envío" de algo que ya se envió.
+            onPress={() => navigation.replace('MisPublicaciones')}
+          />
           <Boton titulo="Publicar otra" onPress={empezarDeNuevo} variante="secundario" />
         </View>
       </View>
@@ -431,6 +531,13 @@ export default function PublicarScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
         <PasosIndicador paso={paso} total={pasos.length} titulo={pasoActual.titulo} />
+
+        {!conectado ? (
+          <Aviso
+            tipo="info"
+            mensaje={TEXTOS.cargaOffline(motivoOffline)}
+          />
+        ) : null}
 
         <Aviso mensaje={errorPedido} />
 
@@ -495,8 +602,6 @@ export default function PublicarScreen({ navigation }) {
 
         {pasoActual.clave === 'cuando' ? (
           <>
-            {/* Los atajos resuelven la mayoría de los casos: quien perdió algo
-                se acuerda si fue hoy o ayer, no la fecha exacta. */}
             <View style={styles.atajos}>
               {ATAJOS_FECHA.map((atajo) => {
                 const iso = isoDeHace(atajo.dias);
@@ -612,7 +717,7 @@ export default function PublicarScreen({ navigation }) {
 
         <View style={styles.botones}>
           <Boton
-            titulo={esUltimo ? 'Publicar' : 'Continuar'}
+            titulo={esUltimo ? (conectado ? 'Publicar' : 'Guardar para enviar') : 'Continuar'}
             onPress={avanzar}
             cargando={publicando}
           />
@@ -696,6 +801,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.success,
     marginBottom: spacing.sm,
+  },
+  pendienteTitulo: {
+    color: '#8D6E00',
   },
   exitoTexto: {
     fontSize: fontSizes.md,

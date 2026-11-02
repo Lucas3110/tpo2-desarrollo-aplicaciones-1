@@ -20,10 +20,12 @@ import {
 } from 'react-native';
 import Aviso from '../../components/Aviso';
 import Avatar from '../../components/Avatar';
+import AvisoRequiereConexion from '../../components/AvisoRequiereConexion';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import SelectorLista from '../../components/SelectorLista';
 import { useAuth } from '../../hooks/useAuth';
+import { useNetworkState } from '../../hooks/useNetworkState';
 import { elegirDeGaleria, subirFoto } from '../../services/fotoService';
 import { actualizarMisDatos } from '../../services/perfilService';
 import { obtenerBarrios } from '../../services/publicacionService';
@@ -37,6 +39,7 @@ import { colors, fontSizes, spacing } from '../../config/theme';
 
 export default function EditarPerfilScreen({ navigation }) {
   const { usuario, actualizarUsuario } = useAuth();
+  const { conectado } = useNetworkState();
 
   const [nombre, setNombre] = useState(usuario?.nombre ?? '');
   const [telefono, setTelefono] = useState(usuario?.telefono ?? '');
@@ -78,6 +81,7 @@ export default function EditarPerfilScreen({ navigation }) {
   }
 
   async function guardar() {
+    if (!conectado) return;
     const malos = validarFormulario({
       nombre: validarNombre(nombre),
       telefono: validarTelefono(telefono),
@@ -121,7 +125,12 @@ export default function EditarPerfilScreen({ navigation }) {
             ) : null}
           </View>
           <View style={styles.accionesFoto}>
-            <TouchableOpacity onPress={cambiarFoto} disabled={ocupado} hitSlop={8}>
+            <TouchableOpacity
+              onPress={cambiarFoto}
+              disabled={ocupado || !conectado}
+              style={!conectado ? { opacity: 0.5 } : null}
+              hitSlop={8}
+            >
               <Text style={styles.enlace}>{fotoUrl ? 'Cambiar foto' : 'Agregar foto'}</Text>
             </TouchableOpacity>
             {fotoUrl ? (
@@ -132,6 +141,7 @@ export default function EditarPerfilScreen({ navigation }) {
           </View>
         </View>
 
+        <AvisoRequiereConexion accion="guardar los cambios de tu perfil" />
         <Aviso mensaje={errorPedido} />
 
         <CampoTexto
@@ -177,7 +187,12 @@ export default function EditarPerfilScreen({ navigation }) {
         />
 
         <View style={styles.botones}>
-          <Boton titulo="Guardar" onPress={guardar} cargando={guardando} deshabilitado={subiendoFoto} />
+          <Boton
+            titulo="Guardar"
+            onPress={guardar}
+            cargando={guardando}
+            deshabilitado={subiendoFoto || !conectado}
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
