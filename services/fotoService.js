@@ -5,6 +5,7 @@
 // y que lo de cámara entra en una entrega posterior.
 import * as ImagePicker from 'expo-image-picker';
 import apiClient from './apiClient';
+import { TIMEOUT_SUBIDA_MS } from '../config/env';
 import { conDialogoDelSistema } from './dialogosDelSistema';
 
 // Qué tan grande y con qué calidad pedimos la imagen.
@@ -58,10 +59,16 @@ export async function subirFoto(asset) {
     throw new Error('No pudimos leer esa imagen, probá con otra.');
   }
 
-  const { data } = await apiClient.post('/hallado/fotos', {
-    base64: asset.base64,
-    mime: asset.mimeType ?? 'image/jpeg',
-  });
+  // Timeout propio, mucho mas largo que el del resto: acá viajan cientos de
+  // KB y el de diez segundos se agotaba antes de terminar.
+  const { data } = await apiClient.post(
+    '/hallado/fotos',
+    {
+      base64: asset.base64,
+      mime: asset.mimeType ?? 'image/jpeg',
+    },
+    { timeout: TIMEOUT_SUBIDA_MS }
+  );
   return data.url;
 }
 
