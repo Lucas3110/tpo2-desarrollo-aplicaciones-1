@@ -20,7 +20,12 @@ import { elegirDeGaleria, MAX_FOTOS, subirFotos } from '../services/fotoService'
 import { urlDeFoto } from '../services/publicacionService';
 import { colors, fontSizes, radius, spacing } from '../config/theme';
 
-export default function SelectorFotos({ urls, onCambiar }) {
+// `onOcupado` avisa hacia afuera cuando hay una subida en curso.
+//
+// Sin eso, el formulario que envuelve a este componente no se entera y deja
+// tocar "Continuar" con las fotos a medio subir: se pasa de paso, y las que
+// no habian terminado no quedan en la publicacion.
+export default function SelectorFotos({ urls, onCambiar, onOcupado }) {
   const [subiendo, setSubiendo] = useState(false);
   const [progreso, setProgreso] = useState(null);
   const [error, setError] = useState(null);
@@ -34,6 +39,7 @@ export default function SelectorFotos({ urls, onCambiar }) {
       if (elegidas.length === 0) return;
 
       setSubiendo(true);
+      if (onOcupado) onOcupado(true);
       const { urls: nuevas, fallidas } = await subirFotos(elegidas, (hecha, total) =>
         setProgreso(`Subiendo ${hecha} de ${total}…`)
       );
@@ -51,6 +57,7 @@ export default function SelectorFotos({ urls, onCambiar }) {
     } finally {
       setSubiendo(false);
       setProgreso(null);
+      if (onOcupado) onOcupado(false);
     }
   };
 
