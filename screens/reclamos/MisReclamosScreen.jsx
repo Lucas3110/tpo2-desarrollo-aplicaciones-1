@@ -22,9 +22,13 @@ import {
   View,
 } from 'react-native';
 import Aviso from '../../components/Aviso';
+import { useAuth } from '../../hooks/useAuth';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import { conCopiaLocal } from '../../services/copiaLocal';
 import { urlDeFoto } from '../../services/publicacionService';
 import { misReclamos } from '../../services/reclamoService';
 import { isoATexto } from '../../utils/fechas';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import {
   describirEstadoReclamo,
   describirTipoReclamo,
@@ -33,8 +37,12 @@ import {
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 export default function MisReclamosScreen({ navigation }) {
+  const { usuario } = useAuth();
+  const { motivoOffline } = useNetworkState();
   // { enviados, recibidos, resumen }. null hasta la primera carga.
   const [datos, setDatos] = useState(null);
+  // true si lo que se ve es la copia guardada y no lo último del servidor.
+  const [desdeCopia, setDesdeCopia] = useState(false);
   const [solapa, setSolapa] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
@@ -45,7 +53,13 @@ export default function MisReclamosScreen({ navigation }) {
     if (!yaCargo.current && !esRefresco) setCargando(true);
     setError(null);
     try {
-      const respuesta = await misReclamos();
+      // Sin conexión se muestra la última copia que cargó bien, con un aviso.
+      const { datos: respuesta, desdeCopia: esCopia } = await conCopiaLocal(
+        'reclamos',
+        usuario?.id,
+        misReclamos
+      );
+      setDesdeCopia(esCopia);
       setDatos(respuesta);
       // La primera vez se abre la solapa que pide algo: si hay reclamos
       // esperando mi respuesta, esa; si no, los que envié.
@@ -105,6 +119,12 @@ export default function MisReclamosScreen({ navigation }) {
           onPress={() => setSolapa('enviados')}
         />
       </View>
+
+      {desdeCopia ? (
+        <View style={styles.avisoError}>
+          <Aviso tipo="info" mensaje={TEXTOS.datosDesactualizados(motivoOffline)} />
+        </View>
+      ) : null}
 
       {error ? (
         <View style={styles.avisoError}>

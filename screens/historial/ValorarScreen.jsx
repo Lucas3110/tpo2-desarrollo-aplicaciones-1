@@ -20,9 +20,11 @@ import {
   View,
 } from 'react-native';
 import Aviso from '../../components/Aviso';
+import AvisoRequiereConexion from '../../components/AvisoRequiereConexion';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import SelectorOpciones from '../../components/SelectorOpciones';
+import { useNetworkState } from '../../hooks/useNetworkState';
 import { valorarCaso } from '../../services/historialService';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
@@ -42,12 +44,14 @@ export default function ValorarScreen({ navigation, route }) {
   const [tipo, setTipo] = useState(null);
   const [mensaje, setMensaje] = useState('');
   const [agradecimiento, setAgradecimiento] = useState('');
+  const { conectado } = useNetworkState();
   const [errores, setErrores] = useState({});
   const [errorPedido, setErrorPedido] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [enviada, setEnviada] = useState(null);
 
   async function enviar() {
+    if (!conectado) return;
     const malos = {};
     if (tipo === null) malos.tipo = 'Elegí una de las dos';
     if (mensaje.length > MENSAJE_MAX) malos.mensaje = `Hasta ${MENSAJE_MAX} caracteres`;
@@ -101,6 +105,7 @@ export default function ValorarScreen({ navigation, route }) {
         <Text style={styles.titulo}>Valorar a {contraparte.nombre}</Text>
         <Text style={styles.subtitulo}>{titulo}</Text>
 
+        <AvisoRequiereConexion accion="enviar la valoración" />
         <Aviso mensaje={errorPedido} />
 
         <SelectorOpciones
@@ -148,7 +153,12 @@ export default function ValorarScreen({ navigation, route }) {
         ) : null}
 
         <View style={styles.botones}>
-          <Boton titulo="Enviar valoración" onPress={enviar} cargando={enviando} />
+          <Boton
+            titulo="Enviar valoración"
+            onPress={enviar}
+            cargando={enviando}
+            deshabilitado={!conectado}
+          />
           <TouchableOpacity style={styles.volver} onPress={() => navigation.goBack()} disabled={enviando}>
             <Text style={styles.enlace}>Cancelar</Text>
           </TouchableOpacity>

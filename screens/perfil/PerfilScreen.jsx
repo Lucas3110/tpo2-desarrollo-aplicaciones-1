@@ -23,9 +23,11 @@ import {
 } from 'react-native';
 import Aviso from '../../components/Aviso';
 import Avatar from '../../components/Avatar';
+import AvisoRequiereConexion from '../../components/AvisoRequiereConexion';
 import Boton from '../../components/Boton';
 import ReputacionPerfil from '../../components/ReputacionPerfil';
 import { useAuth } from '../../hooks/useAuth';
+import { useNetworkState } from '../../hooks/useNetworkState';
 import { actualizarMisDatos, datosDe, obtenerPerfilPublico } from '../../services/perfilService';
 import { describirAntiguedad } from '../../utils/fechas';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
@@ -41,6 +43,7 @@ function Dato({ etiqueta, valor }) {
 
 export default function PerfilScreen({ navigation }) {
   const { usuario, actualizarUsuario } = useAuth();
+  const { conectado } = useNetworkState();
 
   const [perfil, setPerfil] = useState(null);
   const [errorPerfil, setErrorPerfil] = useState(null);
@@ -63,6 +66,7 @@ export default function PerfilScreen({ navigation }) {
   );
 
   async function cambiarVisibilidad(visible) {
+    if (!conectado) return;
     setErrorPrivacidad(null);
     setGuardandoPrivacidad(true);
     try {
@@ -107,6 +111,7 @@ export default function PerfilScreen({ navigation }) {
       </View>
 
       <Text style={styles.seccion}>Privacidad</Text>
+      <AvisoRequiereConexion accion="cambiar esta opción" />
       <Aviso mensaje={errorPrivacidad} />
       <View style={styles.tarjeta}>
         <View style={styles.fila}>
@@ -123,7 +128,7 @@ export default function PerfilScreen({ navigation }) {
           <Switch
             value={Boolean(usuario?.telefonoVisible)}
             onValueChange={cambiarVisibilidad}
-            disabled={!tieneTelefono || guardandoPrivacidad}
+            disabled={!tieneTelefono || guardandoPrivacidad || !conectado}
             trackColor={{ true: colors.primary, false: colors.border }}
           />
         </View>

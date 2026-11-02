@@ -24,9 +24,11 @@ import {
   View,
 } from 'react-native';
 import Aviso from '../../components/Aviso';
+import AvisoRequiereConexion from '../../components/AvisoRequiereConexion';
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import SelectorLista from '../../components/SelectorLista';
+import { useNetworkState } from '../../hooks/useNetworkState';
 import { elegirDeGaleria, subirFoto } from '../../services/fotoService';
 import { obtenerBarrios, urlDeFoto } from '../../services/publicacionService';
 import { crearReclamo } from '../../services/reclamoService';
@@ -42,6 +44,7 @@ const CODIGOS_SIN_SALIDA = ['SIN_INTENTOS', 'RECLAMO_PENDIENTE', 'PUBLICACION_NO
 export default function ReclamarScreen({ navigation, route }) {
   const { publicacionId, tipo, titulo, pregunta } = route.params;
   const esMio = tipo === 'ES_MIO';
+  const { conectado } = useNetworkState();
 
   const [respuesta, setRespuesta] = useState('');
   const [descripcion, setDescripcion] = useState('');
@@ -70,6 +73,7 @@ export default function ReclamarScreen({ navigation, route }) {
   // Una sola foto: es la que acredita. Se sube apenas se elige, como en
   // publicar, así al enviar no hay que esperar nada.
   async function agregarFoto() {
+    if (!conectado) return;
     setErrorPedido(null);
     try {
       const [elegida] = await elegirDeGaleria(1);
@@ -98,6 +102,7 @@ export default function ReclamarScreen({ navigation, route }) {
   }
 
   async function enviar() {
+    if (!conectado) return;
     const malos = validar();
     setErrores(malos);
     setErrorPedido(null);
@@ -172,6 +177,7 @@ export default function ReclamarScreen({ navigation, route }) {
         <Text style={styles.titulo}>{esMio ? 'Es mío' : 'Lo encontré'}</Text>
         <Text style={styles.publicacion}>{titulo}</Text>
 
+        <AvisoRequiereConexion accion="enviar el reclamo" />
         <Aviso mensaje={errorPedido} />
 
         {esMio ? (
@@ -238,7 +244,7 @@ export default function ReclamarScreen({ navigation, route }) {
             titulo="Enviar reclamo"
             onPress={enviar}
             cargando={enviando}
-            deshabilitado={subiendoFoto}
+            deshabilitado={subiendoFoto || !conectado}
           />
           <TouchableOpacity style={styles.volver} onPress={() => navigation.goBack()} disabled={enviando}>
             <Text style={styles.enlace}>Cancelar</Text>
