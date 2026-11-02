@@ -6,6 +6,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import apiClient from './apiClient';
 import { conDialogoDelSistema } from './dialogosDelSistema';
+import { TIMEOUT_FOTO_MS } from '../config/env';
 
 // Qué tan grande y con qué calidad pedimos la imagen.
 //
@@ -51,6 +52,11 @@ export async function elegirDeGaleria(cuantasFaltan) {
 //
 // Manda la imagen en base64 y recibe la URL relativa con la que queda
 // guardada. Esa url es la que después va en el campo fotos de la publicación.
+//
+// Punto 6: si no hay conexión (`e.esDeConexion`), devolvemos la URI local de
+// la foto (`file://...`) para que quede en el borrador y en
+// `publicaciones_pendientes`. Cuando vuelve internet, `offlineSyncService`
+// la lee y la sube a `/hallado/fotos` antes de enviar la publicación.
 export async function subirFoto(asset) {
   if (!asset.base64) {
     // No debería pasar porque pedimos base64: true, pero si el picker lo
@@ -58,11 +64,25 @@ export async function subirFoto(asset) {
     throw new Error('No pudimos leer esa imagen, probá con otra.');
   }
 
-  const { data } = await apiClient.post('/hallado/fotos', {
-    base64: asset.base64,
-    mime: asset.mimeType ?? 'image/jpeg',
-  });
-  return data.url;
+  const mime = asset.mimeType ?? 'image/jpeg';
+
+  try {
+    const { data } = await apiClient.post(
+      '/hallado/fotos',
+      { base64: asset.base64, mime },
+      { timeout: TIMEOUT_FOTO_MS }
+    );
+    return data.url;
+  } catch (e) {
+    if (e.esDeConexion && asset.uri) {
+      // Guardamos solo la URI local de la foto (unas decenas de bytes), no el
+      // base64 completo: varias fotos de varios MB dentro del borrador
+      // (AsyncStorage) o de `payload_json` (SQLite) rompen los límites de
+      // Android. `offlineSyncService` lee el archivo recién al sincronizar.
+      return asset.uri;
+    }
+    throw e;
+  }
 }
 
 // Sube varias y devuelve { urls, fallidas }.

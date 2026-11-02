@@ -15,3 +15,8 @@ export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:300
 
 // Cuanto esperamos una respuesta antes de darla por perdida.
 export const TIMEOUT_MS = 10000;
+
+// Las fotos pesan cientos de KB (van en base64, ~550 KB cada una) y con 10 s no
+// alcanza si la conexión es lenta: el pedido se corta a la mitad, la foto no
+// sube y, con el modo sin conexión, queda reintentando sin llegar nunca.
+export const TIMEOUT_FOTO_MS = 60000;
