@@ -1,9 +1,11 @@
 // Pantallas de adentro de la app.
 //
-// Cada punto de la consigna registra las suyas aca. Las que todavia no
-// existen quedan apuntando a pantallaPendiente(), asi el que necesita
-// navegar hacia una pantalla ajena puede hacerlo hoy sin esperar a nadie:
-// cuando el otro mergee, se cambia el component y nada mas.
+// Cada punto de la consigna registra las suyas aca, y estan las de los diez.
+//
+// Mientras se construia, las que todavia no existian apuntaban a un
+// placeholder: asi el que necesitaba navegar a una pantalla ajena podia
+// hacerlo sin esperar a nadie, y al mergear solo se cambiaba el component.
+// Ya no queda ninguna.
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BuscadorScreen from '../screens/buscador/BuscadorScreen';
 import ConfiguracionScreen from '../screens/configuracion/ConfiguracionScreen';
