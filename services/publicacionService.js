@@ -11,6 +11,7 @@ import {
   guardarPublicacionEnCache,
   guardarPublicacionesEnCache,
   guardarResultadosBusquedaEnCache,
+  subirFotosLocales,
   leerPublicacionDeCache,
   leerUltimosResultadosDeCache,
   listarPublicacionesPendientes,
@@ -82,15 +83,23 @@ export async function obtenerBarrios() {
 // publicación en la cola de pendientes (AsyncStorage) para
 // que `NetworkContext` la envíe sola apenas vuelva internet.
 export async function crearPublicacion(datos, opcionesOffline = {}) {
+  // Si las fotos se eligieron sin conexión siguen siendo locales: hay que
+  // subirlas antes de publicar, porque el backend solo acepta URLs. Si la subida
+  // falla por conexión, el catch de abajo encola la publicación como siempre
+  // (con las fotos locales, que la cola sube al sincronizar).
+  let cuerpo = datos;
   try {
-    const { data } = await apiClient.post('/hallado/publicaciones', datos);
+    if (Array.isArray(datos.fotos) && datos.fotos.length > 0) {
+      cuerpo = { ...datos, fotos: await subirFotosLocales(datos.fotos) };
+    }
+    const { data } = await apiClient.post('/hallado/publicaciones', cuerpo);
     await guardarPublicacionEnCache(data.publicacion);
     return data.publicacion;
   } catch (e) {
     if (e.esDeConexion && opcionesOffline.permitirEncolar !== false) {
       // `pudoLlegar`: el pedido llegó a salir (ej. timeout). Si el servidor lo
       // procesó pero perdimos la respuesta, la cola verifica antes de reenviar.
-      const pendiente = await encolarPublicacionPendiente(opcionesOffline.usuarioId, datos, {
+      const pendiente = await encolarPublicacionPendiente(opcionesOffline.usuarioId, cuerpo, {
         ...opcionesOffline,
         posibleEnvio: Boolean(e.pudoLlegar),
       });

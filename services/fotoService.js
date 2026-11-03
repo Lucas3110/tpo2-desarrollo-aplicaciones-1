@@ -18,6 +18,13 @@ const CALIDAD = 0.6;
 
 export const MAX_FOTOS = 8;
 
+// Sin conexión la foto no se puede subir, así que se guarda en el teléfono
+// dentro del borrador y de la cola de pendientes (AsyncStorage). Esos datos se
+// leen enteros, y en Android un valor muy grande puede fallar al leerse: por
+// eso sin conexión se admite UNA foto, y de un tamaño acotado.
+export const MAX_FOTOS_SIN_CONEXION = 1;
+const MAX_BASE64_SIN_CONEXION = 1500000; // ~1,1 MB de imagen
+
 // Devuelve las imágenes elegidas, o [] si la persona canceló.
 //
 // Lanza un Error con mensaje legible si no dio permiso: ese caso hay que
@@ -53,10 +60,14 @@ export async function elegirDeGaleria(cuantasFaltan) {
 // Manda la imagen en base64 y recibe la URL relativa con la que queda
 // guardada. Esa url es la que después va en el campo fotos de la publicación.
 //
-// Punto 6: si no hay conexión (`e.esDeConexion`), devolvemos la URI local de
-// la foto (`file://...`) para que quede en el borrador y en
-// la cola de pendientes. Cuando vuelve internet, `offlineSyncService`
-// la lee y la sube a `/hallado/fotos` antes de enviar la publicación.
+// Punto 6: si no hay conexión (`e.esDeConexion`), devolvemos la foto como
+// `data:<mime>;base64,...` para que quede en el borrador y en la cola de
+// pendientes. Cuando vuelve internet, `offlineSyncService` la sube a
+// `/hallado/fotos` antes de enviar la publicación.
+//
+// No se guarda la dirección del archivo (`content://...`): el selector de fotos
+// de Android la entrega con un permiso temporal, y más tarde no se puede leer
+// (llega vacía y el servidor responde que no es una imagen).
 export async function subirFoto(asset) {
   if (!asset.base64) {
     // No debería pasar porque pedimos base64: true, pero si el picker lo
@@ -74,12 +85,13 @@ export async function subirFoto(asset) {
     );
     return data.url;
   } catch (e) {
-    if (e.esDeConexion && asset.uri) {
-      // Guardamos solo la URI local de la foto (unas decenas de bytes), no el
-      // base64 completo: varias fotos de varios MB dentro del borrador
-      // (AsyncStorage) o de la cola de pendientes rompen los límites de
-      // Android. `offlineSyncService` lee el archivo recién al sincronizar.
-      return asset.uri;
+    if (e.esDeConexion) {
+      if (asset.base64.length > MAX_BASE64_SIN_CONEXION) {
+        throw new Error(
+          'Sin conexión la foto es muy pesada para guardarla. Probá con otra o publicá cuando vuelva internet.'
+        );
+      }
+      return `data:${mime};base64,${asset.base64}`;
     }
     throw e;
   }
