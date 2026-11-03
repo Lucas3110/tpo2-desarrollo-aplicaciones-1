@@ -55,7 +55,7 @@ export async function elegirDeGaleria(cuantasFaltan) {
 //
 // Punto 6: si no hay conexión (`e.esDeConexion`), devolvemos la URI local de
 // la foto (`file://...`) para que quede en el borrador y en
-// `publicaciones_pendientes`. Cuando vuelve internet, `offlineSyncService`
+// la cola de pendientes. Cuando vuelve internet, `offlineSyncService`
 // la lee y la sube a `/hallado/fotos` antes de enviar la publicación.
 export async function subirFoto(asset) {
   if (!asset.base64) {

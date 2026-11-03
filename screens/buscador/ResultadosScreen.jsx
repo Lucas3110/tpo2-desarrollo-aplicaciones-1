@@ -9,7 +9,7 @@
 // - Usa `useFocusEffect` para cargar/refrescar al entrar o volver a la
 //   pantalla.
 // - Si no hay red, `buscarPublicaciones` lee los últimos resultados de
-//   `publicaciones_cacheadas` en WatermelonDB (`desdeCache: true`).
+//   la caché local de publicaciones (`desdeCache: true`).
 // - Un refresco fallido no borra lo que ya estaba en pantalla y muestra
 //   `<Aviso tipo="info" />` advirtiendo que la información podría no estar
 //   actualizada.
