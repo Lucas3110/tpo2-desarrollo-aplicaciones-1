@@ -75,36 +75,6 @@ Si algo queda raro después de instalar dependencias:
 npx expo start --clear
 ```
 
-### Si la app dice "Sin conexión" aunque el backend esté andando
-
-Es lo primero que nos pasó y cuesta de encontrar, porque la app carga bien.
-
-Metro (el que sirve el JavaScript) llega al emulador por un **túnel de adb**
-que Expo arma solo para el puerto 8081. El backend no tiene ese túnel, así que
-el emulador tiene que alcanzarlo por la red — y el firewall de Windows bloquea
-la entrada al 3000. Resultado: la app abre, pero ningún pedido llega.
-
-La solución es el `adb reverse` de arriba, que no necesita permisos de
-administrador. **Hay que volver a correrlo cada vez que arranca el emulador**:
-el túnel no sobrevive al reinicio.
-
-Si la terminal no te reconoce `adb`, está en
-`%LOCALAPPDATA%\Android\Sdk\platform-tools`. Conviene agregar esa carpeta al PATH.
-
-La alternativa es abrir el puerto 3000 en el firewall de Windows (eso sí pide
-administrador) y poner `http://10.0.2.2:3000/api` en el `.env`, que es cómo el
-emulador ve el `localhost` de la PC. Si vas a probar en un **celular físico**
-por WiFi no queda otra: ahí no hay túnel que valga y la URL tiene que ser la IP
-de tu máquina en la red (`ipconfig`, la IPv4).
-
-### Si el cartel dice "Tardó demasiado"
-
-Eso no es falta de conexión: el pedido salió y el servidor no contestó a
-tiempo. Pasa sobre todo subiendo fotos, que viajan en base64 y pesan cientos de
-KB. Reintentar suele alcanzar.
-
----
-
 ## Qué hace la app
 
 | Punto | Qué es | Dónde mirarlo |
@@ -120,29 +90,6 @@ KB. Reintentar suele alcanzar.
 | 9 | Alertas y publicaciones seguidas | `screens/alertas/`, `screens/seguidas/` |
 | 10 | Historial y valoraciones | `screens/historial/` |
 
-Tres flujos que conviene conocer antes de tocar el código, porque no son una
-pantalla sola:
-
-**Registro y recupero van en tres pasos**, cada uno con su pantalla: el email,
-el código, y recién después la contraseña. Eso es así porque un OTP se consume
-al verificarlo: el backend lo cambia por un *ticket* corto
-(`POST /auth/registro/verificar`) y ese ticket es lo que viaja con la
-contraseña. Si fueran una sola pantalla, un código mal escrito se avisaría
-recién después de llenar todo el formulario.
-
-**La biometría desbloquea una sesión que ya existe**, no reemplaza al login. Se
-activa desde Configuración y la preferencia se guarda **por cuenta**, así que
-si dos personas usan el mismo teléfono no heredan la decisión de la otra.
-`navigation/RootNavigator.jsx` muestra la pantalla de desbloqueo en un `Modal`
-encima de la app sin desmontarla: al desbloquear seguís donde estabas.
-
-**El modo sin conexión guarda en AsyncStorage**, en dos claves: las
-publicaciones que consultaste y la cola de las que creaste sin internet. Toda
-esa lógica vive en `services/offlineSyncService.js`; ninguna pantalla habla con
-el almacenamiento directamente.
-
----
-
 ## Expo Go
 
 El proyecto corre entero en **Expo Go**: no hay que compilar nada, ni hace
@@ -153,17 +100,10 @@ Las librerías que usamos vienen adentro de Expo Go (`expo-secure-store`,
 JavaScript puro (`@react-native-async-storage/async-storage`,
 `@react-native-community/netinfo`).
 
-Eso es una restricción deliberada, no una casualidad. Si alguna vez una
-funcionalidad parece pedir una librería nativa, conviene buscar primero cómo
-resolverla con lo que ya está: el modo sin conexión arrancó usando una base de
-datos nativa y terminó en AsyncStorage, que alcanzaba de sobra y no sacaba al
-proyecto de Expo Go.
-
 ---
 
 ## Estructura
 
-La que propuso el profe en clase:
 
 ```
 components/   piezas de UI reutilizables, sin lógica de negocio
