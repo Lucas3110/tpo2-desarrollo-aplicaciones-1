@@ -12,7 +12,7 @@
 //
 // Mismo criterio que el wizard de publicar: un solo componente con un estado
 // `paso`, porque los pasos comparten todo el formulario.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -33,6 +33,8 @@ import PasosIndicador from '../../components/PasosIndicador';
 import SelectorLista from '../../components/SelectorLista';
 import SelectorOpciones from '../../components/SelectorOpciones';
 import { useAuth } from '../../hooks/useAuth';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import {
   borrarBusquedas,
   guardarBusqueda,
@@ -65,6 +67,7 @@ const PASOS = [
 
 export default function BuscadorScreen({ navigation }) {
   const { usuario } = useAuth();
+  const { conectado, motivoOffline } = useNetworkState();
 
   const [categorias, setCategorias] = useState([]);
   const [barrios, setBarrios] = useState([]);
@@ -89,14 +92,27 @@ export default function BuscadorScreen({ navigation }) {
   // poder repetirlas con un toque".
   const [ultimas, setUltimas] = useState([]);
 
-  useEffect(() => {
-    cargarCatalogos();
-  }, []);
+  const cargarCatalogos = useCallback(async () => {
+    if (categorias.length === 0 || barrios.length === 0) setCargandoCatalogos(true);
+    setErrorCatalogos(null);
+    try {
+      const [c, b] = await Promise.all([obtenerCategorias(), obtenerBarrios()]);
+      setCategorias(c);
+      setBarrios(b);
+    } catch (e) {
+      if (categorias.length === 0 || barrios.length === 0) {
+        setErrorCatalogos(e.message);
+      }
+    } finally {
+      setCargandoCatalogos(false);
+    }
+  }, [categorias.length, barrios.length]);
 
   // Se releen cada vez que se vuelve a esta pantalla: si acaba de buscar,
   // esa busqueda tiene que aparecer arriba al volver.
   useFocusEffect(
     useCallback(() => {
+      cargarCatalogos();
       leerBusquedas(usuario?.id).then(setUltimas);
       // Y se vuelve al primer paso. Al volver de los resultados el wizard
       // quedaba en la ultima pregunta, y asi las ultimas busquedas no se
@@ -104,7 +120,7 @@ export default function BuscadorScreen({ navigation }) {
       // respuestas NO se borran: con tres toques en Continuar se vuelve
       // adonde estaba.
       setPaso(0);
-    }, [usuario?.id])
+    }, [usuario?.id, cargarCatalogos])
   );
 
   // Punto 9: el indicador de novedad en el botón del menú. Se pide al tomar
@@ -126,20 +142,6 @@ export default function BuscadorScreen({ navigation }) {
         .catch(() => {});
     }, [navigation])
   );
-
-  async function cargarCatalogos() {
-    setCargandoCatalogos(true);
-    setErrorCatalogos(null);
-    try {
-      const [c, b] = await Promise.all([obtenerCategorias(), obtenerBarrios()]);
-      setCategorias(c);
-      setBarrios(b);
-    } catch (e) {
-      setErrorCatalogos(e.message);
-    } finally {
-      setCargandoCatalogos(false);
-    }
-  }
 
   const pasoActual = PASOS[paso];
   const esUltimo = paso === PASOS.length - 1;
@@ -270,6 +272,13 @@ export default function BuscadorScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
         {paso === 0 ? (
           <Text style={styles.saludo}>Hola, {usuario?.nombre ?? 'vecino'}</Text>
+        ) : null}
+
+        {!conectado ? (
+          <Aviso
+            tipo="info"
+            mensaje={TEXTOS.buscadorOffline(motivoOffline)}
+          />
         ) : null}
 
         <PasosIndicador paso={paso} total={PASOS.length} titulo={pasoActual.titulo} />

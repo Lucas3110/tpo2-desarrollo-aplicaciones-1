@@ -88,25 +88,14 @@ que valga y la URL tiene que ser la IP de tu PC en la red.
 
 ---
 
-## Expo Go y el development build
+## Expo Go
 
-Hoy el proyecto corre entero en **Expo Go**: no hay que compilar nada. Todas las
+El proyecto corre entero en **Expo Go**: no hay que compilar nada. Las
 librerías que usamos vienen adentro de Expo Go (`expo-secure-store`,
-`expo-local-authentication`, `expo-image-picker`, `expo-location`).
-
-Eso **cambia cuando entre WatermelonDB** (lo necesita el punto 6). WatermelonDB
-no está en el SDK de Expo, así que no funciona en Expo Go y hay que pasar a
-**development build**:
-
-```bash
-npx expo run:android
-```
-
-La primera vez tarda 10-15 minutos porque compila la app nativa. Después se
-trabaja igual que antes.
-
-**Importante:** cuando eso pase, lo tiene que hacer todo el equipo, no solo quien
-agregó la librería. No es una decisión individual.
+`expo-local-authentication`, `expo-image-picker`, `expo-location`) o son
+JavaScript puro (`@react-native-async-storage/async-storage`,
+`@react-native-community/netinfo`). El modo sin conexión (punto 6) guarda sus
+datos en AsyncStorage, así que no hace falta un development build.
 
 ---
 

@@ -23,6 +23,8 @@ import {
 import Boton from '../../components/Boton';
 import CampoTexto from '../../components/CampoTexto';
 import Aviso from '../../components/Aviso';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import {
   obtenerEncuentro,
   proponerEncuentro,
@@ -45,6 +47,7 @@ const DESINCRONIZADO = [
 
 export default function PuntoDeEncuentroScreen({ route, navigation }) {
   const reclamoId = route.params?.reclamoId;
+  const { conectado, motivoOffline } = useNetworkState();
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(false);
@@ -189,7 +192,9 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
     );
 
   const punto = datos.encuentro;
-  const inactivo = ocupado || cargando || sinConexion;
+  // Sin conexión (la de la app, o porque falló la última carga) no se puede
+  // proponer, aceptar ni sugerir: se deshabilita y se explica por qué.
+  const inactivo = ocupado || cargando || sinConexion || !conectado;
   const formulario = datos.puedoProponer && (!punto || alternativa);
   const estado = !punto
     ? 'Falta proponer un lugar'
@@ -212,10 +217,10 @@ export default function PuntoDeEncuentroScreen({ route, navigation }) {
       <Text style={styles.titulo}>{datos.publicacion.titulo}</Text>
       <Text style={styles.estado}>{estado}</Text>
       <Aviso mensaje={error} />
-      {sinConexion ? (
+      {sinConexion || !conectado ? (
         <Aviso
           tipo="info"
-          mensaje="Necesitás conexión para coordinar. Conservamos lo último que cargó; tocá Actualizar para reintentar."
+          mensaje={`${TEXTOS.necesitaConexion(motivoOffline, 'coordinar el encuentro')} Conservamos lo último que cargó; tocá Actualizar para reintentar.`}
         />
       ) : null}
       <Boton

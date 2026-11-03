@@ -16,9 +16,7 @@ export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:300
 // Cuanto esperamos una respuesta antes de darla por perdida.
 export const TIMEOUT_MS = 10000;
 
-// Subir una foto es otra cosa: no es un JSON de dos campos sino cientos de
-// KB en base64, y por una conexión lenta diez segundos no alcanzan. Cuando
-// no alcanzaban, la app decía "Sin conexión" aunque el backend estuviera
-// perfecto, porque axios no distingue un tiempo agotado de un servidor
-// inalcanzable (eso lo resuelve normalizarError en apiClient).
-export const TIMEOUT_SUBIDA_MS = 60000;
+// Las fotos pesan cientos de KB (van en base64, ~550 KB cada una) y con 10 s no
+// alcanza si la conexión es lenta: el pedido se corta a la mitad, la foto no
+// sube y, con el modo sin conexión, queda reintentando sin llegar nunca.
+export const TIMEOUT_FOTO_MS = 60000;
