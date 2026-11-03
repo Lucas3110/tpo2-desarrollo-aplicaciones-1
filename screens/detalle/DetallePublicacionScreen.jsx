@@ -1,15 +1,17 @@
-// Punto 4: el detalle de una publicación.
+// Punto 4 y Punto 6: el detalle de una publicación, con soporte offline.
 //
 // "Galería con todas las fotos, descripción, categoría, fecha y franja
 // horaria del suceso, estado de la publicación (abierta, en reclamo,
 // resuelta) y el barrio donde ocurrió. Datos del publicador con su
 // reputación y acceso a su perfil público."
 //
-// Qué se ve depende de quién mira, pero eso NO lo decide la app: el backend
-// manda `acciones` ya resueltas (si soy el publicador, si puedo reclamar, qué
-// dice el botón). Así la regla vive en un solo lugar y no se desincroniza.
-// Con la dirección exacta pasa lo mismo: si no corresponde mostrarla,
-// directamente no viaja.
+// Punto 6:
+// - Si no hay red, `obtenerPublicacion` lee de la caché local de
+//   publicaciones y devuelve `desdeCache: true`.
+// - Si un refresco falla por falta de red y ya había datos en pantalla, no
+//   se borra nada y se advierte con `<Aviso tipo="info" />`.
+// - Usa `useNetworkState()` para deshabilitar las acciones online (reclamar,
+//   seguir, renovar, eliminar) con un mensaje claro.
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -26,6 +28,8 @@ import {
 import Aviso from '../../components/Aviso';
 import Boton from '../../components/Boton';
 import GaleriaFotos from '../../components/GaleriaFotos';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import {
   dejarDeSeguirPublicacion,
   eliminarPublicacion,
@@ -40,9 +44,11 @@ import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 export default function DetallePublicacionScreen({ navigation, route }) {
   const { id } = route.params;
+  const { conectado, motivoOffline } = useNetworkState();
 
   // { publicacion, acciones }. null hasta que carga por primera vez.
   const [detalle, setDetalle] = useState(null);
+  const [desdeCache, setDesdeCache] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [error, setError] = useState(null);
@@ -59,12 +65,22 @@ export default function DetallePublicacionScreen({ navigation, route }) {
     if (!yaCargo.current && !esRefresco) setCargando(true);
     setError(null);
     try {
-      setDetalle(await obtenerPublicacion(id));
+      const datos = await obtenerPublicacion(id);
+      setDetalle(datos);
+      setDesdeCache(Boolean(datos.desdeCache));
       yaCargo.current = true;
     } catch (e) {
       // A propósito no se toca `detalle`: si falló el refresco, lo anterior
-      // queda en pantalla y el aviso va arriba.
-      setError(e.message);
+      // queda en pantalla. Si el fallo fue de conexión y ya teníamos datos,
+      // mostramos el aviso informativo de desactualización en lugar de error.
+      if (e.esDeConexion && yaCargo.current) {
+        setDesdeCache(true);
+      } else if (e.esDeConexion) {
+        // Sin conexión y sin copia guardada: nunca se vio esta publicación.
+        setError(TEXTOS.detalleNoDisponible(e.causa));
+      } else {
+        setError(e.message);
+      }
     } finally {
       setCargando(false);
       setRefrescando(false);
@@ -82,6 +98,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
   // Seguir / dejar de seguir. El backend contesta { laSigo, seguidores } y
   // con eso se actualiza el detalle sin volver a pedirlo entero.
   async function alternarSeguir() {
+    if (!conectado) return;
     const { publicacion } = detalle;
     setAccionEnCurso('seguir');
     setError(null);
@@ -99,6 +116,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
 
   // "Si es el propio publicador, accede a la gestión de su publicación."
   async function renovar() {
+    if (!conectado) return;
     setAccionEnCurso('renovar');
     setError(null);
     try {
@@ -112,6 +130,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
   }
 
   function confirmarEliminar() {
+    if (!conectado) return;
     // Es la única acción de la pantalla que no se puede deshacer: se
     // pregunta antes.
     Alert.alert('Eliminar publicación', '¿Seguro? Esto no se puede deshacer.', [
@@ -134,6 +153,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
   }
 
   function irAReclamar() {
+    if (!conectado) return;
     const { publicacion, acciones } = detalle;
     navigation.navigate('Reclamar', {
       publicacionId: publicacion.id,
@@ -163,6 +183,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
   const { publicacion, acciones } = detalle;
   const estado = describirEstado(publicacion.estado);
   const franja = describirFranja(publicacion.franjaHoraria);
+  const mostrarAvisoOffline = !conectado || desdeCache;
 
   return (
     <ScrollView
@@ -182,6 +203,13 @@ export default function DetallePublicacionScreen({ navigation, route }) {
       <GaleriaFotos fotos={publicacion.fotos} />
 
       <View style={styles.cuerpo}>
+        {mostrarAvisoOffline ? (
+          <Aviso
+            tipo="info"
+            mensaje={TEXTOS.copiaGuardadaDetalle(motivoOffline)}
+          />
+        ) : null}
+
         {error ? <Aviso mensaje={error} /> : null}
 
         <View style={styles.encabezado}>
@@ -203,10 +231,12 @@ export default function DetallePublicacionScreen({ navigation, route }) {
         </Text>
 
         {/* "Acciones disponibles según quién esté mirando." Cuáles hay lo
-            dijo el backend; acá sólo se pintan. */}
+            dijo el backend; si no hay conexión quedan deshabilitadas con un
+            mensaje claro. */}
         {acciones.esPublicador ? (
           <Gestion
             publicacion={publicacion}
+            conectado={conectado}
             accionEnCurso={accionEnCurso}
             onRenovar={renovar}
             onEliminar={confirmarEliminar}
@@ -216,6 +246,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
           <AccionesDeTercero
             publicacion={publicacion}
             acciones={acciones}
+            conectado={conectado}
             accionEnCurso={accionEnCurso}
             onReclamar={irAReclamar}
             onSeguir={alternarSeguir}
@@ -263,6 +294,7 @@ export default function DetallePublicacionScreen({ navigation, route }) {
         <Publicador
           publicador={publicacion.publicador}
           esPublicador={acciones.esPublicador}
+          conectado={conectado}
           onVerPerfil={() => navigation.navigate('PerfilPublico', { id: publicacion.publicador.id })}
         />
       </View>
@@ -275,31 +307,50 @@ export default function DetallePublicacionScreen({ navigation, route }) {
 // Lo que puede hacer alguien que no publicó: reclamar y seguir.
 //
 // El botón de reclamar dice "Es mío" en algo encontrado y "Lo encontré" en
-// algo perdido. Cuando no se puede reclamar, el botón queda atenuado y
-// abajo se explica por qué: un botón gris sin explicación parece roto.
-function AccionesDeTercero({ publicacion, acciones, accionEnCurso, onReclamar, onSeguir }) {
+// algo perdido. Cuando no se puede reclamar (o no hay conexión), el botón
+// queda atenuado y abajo se explica por qué: un botón gris sin explicación
+// parece roto.
+function AccionesDeTercero({
+  publicacion,
+  acciones,
+  conectado,
+  accionEnCurso,
+  onReclamar,
+  onSeguir,
+}) {
+  const { motivoOffline } = useNetworkState();
   const etiqueta = acciones.reclamo === 'ES_MIO' ? 'Es mío' : 'Lo encontré';
 
   return (
     <View style={styles.acciones}>
-      <Boton titulo={etiqueta} onPress={onReclamar} deshabilitado={!acciones.puedeReclamar} />
-      <Text style={styles.nota}>{explicarReclamo(publicacion, acciones)}</Text>
+      <Boton
+        titulo={etiqueta}
+        onPress={onReclamar}
+        deshabilitado={!conectado || !acciones.puedeReclamar}
+      />
+      <Text style={styles.nota}>
+        {!conectado
+          ? TEXTOS.necesitaConexion(motivoOffline, 'reclamar esta publicación')
+          : explicarReclamo(publicacion, acciones)}
+      </Text>
 
-      {acciones.puedeSeguir ? (
+      {acciones.puedeSeguir || !conectado ? (
         <View style={styles.seguir}>
           <Boton
             titulo={publicacion.laSigo ? 'Dejar de seguir' : 'Seguir esta publicación'}
             onPress={onSeguir}
             cargando={accionEnCurso === 'seguir'}
-            deshabilitado={accionEnCurso !== null}
+            deshabilitado={!conectado || accionEnCurso !== null || !acciones.puedeSeguir}
             variante="secundario"
           />
           <Text style={styles.nota}>
-            {publicacion.laSigo
-              ? 'La seguís: te vas a enterar cuando cambie de estado.'
-              : publicacion.seguidores > 0
-                ? `${plural(publicacion.seguidores, 'persona la sigue', 'personas la siguen')}.`
-                : 'Seguila para enterarte cuando cambie de estado.'}
+            {!conectado
+              ? TEXTOS.necesitaConexion(motivoOffline, 'seguir esta publicación')
+              : publicacion.laSigo
+                ? 'La seguís: te vas a enterar cuando cambie de estado.'
+                : publicacion.seguidores > 0
+                  ? `${plural(publicacion.seguidores, 'persona la sigue', 'personas la siguen')}.`
+                  : 'Seguila para enterarte cuando cambie de estado.'}
           </Text>
         </View>
       ) : null}
@@ -321,18 +372,29 @@ function explicarReclamo(publicacion, acciones) {
   if (estado === 'VENCIDA') return 'Esta publicación venció.';
   if (intentosRestantes === 0) return 'Ya usaste los 3 intentos para esta publicación.';
 
-  const base = acciones.reclamo === 'ES_MIO'
-    ? 'Si es tuyo, vas a tener que responder la pregunta de verificación.'
-    : 'Si lo encontraste, vas a tener que adjuntar una foto y el barrio.';
+  const base =
+    acciones.reclamo === 'ES_MIO'
+      ? 'Si es tuyo, vas a tener que responder la pregunta de verificación.'
+      : 'Si lo encontraste, vas a tener que adjuntar una foto y el barrio.';
 
   if (miReclamo?.estado === 'RECHAZADO' || miReclamo?.estado === 'VENCIDO') {
-    return `${base} Te ${intentosRestantes === 1 ? 'queda 1 intento' : `quedan ${intentosRestantes} intentos`}.`;
+    return `${base} Te ${
+      intentosRestantes === 1 ? 'queda 1 intento' : `quedan ${intentosRestantes} intentos`
+    }.`;
   }
   return base;
 }
 
 // Lo que puede hacer el publicador con lo suyo.
-function Gestion({ publicacion, accionEnCurso, onRenovar, onEliminar, onVerReclamos }) {
+function Gestion({
+  publicacion,
+  conectado,
+  accionEnCurso,
+  onRenovar,
+  onEliminar,
+  onVerReclamos,
+}) {
+  const { motivoOffline } = useNetworkState();
   const { reclamosPendientes, estado, venceEn } = publicacion;
 
   return (
@@ -340,7 +402,12 @@ function Gestion({ publicacion, accionEnCurso, onRenovar, onEliminar, onVerRecla
       <Text style={styles.seccionTitulo}>Tu publicación</Text>
 
       {reclamosPendientes > 0 ? (
-        <TouchableOpacity style={styles.pendientes} onPress={onVerReclamos} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={[styles.pendientes, !conectado ? styles.deshabilitado : null]}
+          onPress={onVerReclamos}
+          disabled={!conectado}
+          activeOpacity={0.7}
+        >
           <Text style={styles.pendientesTexto}>
             {plural(reclamosPendientes, 'reclamo espera', 'reclamos esperan')} tu respuesta
           </Text>
@@ -352,7 +419,9 @@ function Gestion({ publicacion, accionEnCurso, onRenovar, onEliminar, onVerRecla
             ? 'Resuelta: el objeto ya volvió con su dueño.'
             : estado === 'VENCIDA'
               ? 'Venció. Si todavía corresponde, renovala por 30 días más.'
-              : `Vence el ${describirFecha(String(venceEn).slice(0, 10))}. Todavía nadie la reclamó.`}
+              : venceEn
+                ? `Vence el ${describirFecha(String(venceEn).slice(0, 10))}. Todavía nadie la reclamó.`
+                : 'Publicación activa.'}
         </Text>
       )}
 
@@ -362,20 +431,26 @@ function Gestion({ publicacion, accionEnCurso, onRenovar, onEliminar, onVerRecla
             titulo="Renovar por 30 días"
             onPress={onRenovar}
             cargando={accionEnCurso === 'renovar'}
-            deshabilitado={accionEnCurso !== null}
+            deshabilitado={!conectado || accionEnCurso !== null}
             variante="secundario"
           />
         ) : null}
         <TouchableOpacity
-          style={styles.eliminar}
+          style={[styles.eliminar, !conectado ? styles.deshabilitado : null]}
           onPress={onEliminar}
-          disabled={accionEnCurso !== null}
+          disabled={!conectado || accionEnCurso !== null}
           hitSlop={8}
         >
           <Text style={styles.eliminarTexto}>
             {accionEnCurso === 'eliminar' ? 'Eliminando…' : 'Eliminar publicación'}
           </Text>
         </TouchableOpacity>
+
+        {!conectado ? (
+          <Text style={styles.nota}>
+            {TEXTOS.necesitaConexion(motivoOffline, 'renovar, eliminar o gestionar reclamos')}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -391,11 +466,8 @@ function Seccion({ titulo, children }) {
 }
 
 // "Datos del publicador con su reputación y acceso a su perfil público."
-//
-// La reputación de Hallado se cuenta en casos cerrados, no en estrellas:
-// cuántas veces devolvió algo y cuántas recuperó lo suyo.
-function Publicador({ publicador, esPublicador, onVerPerfil }) {
-  const { reputacion } = publicador;
+function Publicador({ publicador, esPublicador, conectado, onVerPerfil }) {
+  const reputacion = publicador?.reputacion ?? { devoluciones: 0, recuperos: 0 };
 
   return (
     <View style={styles.publicador}>
@@ -422,7 +494,12 @@ function Publicador({ publicador, esPublicador, onVerPerfil }) {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.enlaceContenedor} onPress={onVerPerfil} hitSlop={8}>
+      <TouchableOpacity
+        style={[styles.enlaceContenedor, !conectado ? styles.deshabilitado : null]}
+        onPress={onVerPerfil}
+        disabled={!conectado}
+        hitSlop={8}
+      >
         <Text style={styles.enlace}>Ver perfil público</Text>
       </TouchableOpacity>
     </View>
@@ -507,17 +584,19 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   pendientes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#FFF8E1',
     borderWidth: 1,
     borderColor: colors.warning,
     borderRadius: radius.sm,
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   pendientesTexto: {
     fontSize: fontSizes.sm,
-    color: colors.text,
+    color: '#8D6E00',
     fontWeight: 'bold',
-    marginBottom: spacing.xs,
   },
   gestionBotones: {
     marginTop: spacing.md,
@@ -525,12 +604,15 @@ const styles = StyleSheet.create({
   },
   eliminar: {
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   eliminarTexto: {
     color: colors.danger,
     fontSize: fontSizes.sm,
     fontWeight: 'bold',
+  },
+  deshabilitado: {
+    opacity: 0.5,
   },
   seccion: {
     marginTop: spacing.lg,
@@ -540,7 +622,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   texto: {
     fontSize: fontSizes.md,
@@ -548,7 +630,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   textoVacio: {
-    fontSize: fontSizes.md,
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
     fontStyle: 'italic',
   },

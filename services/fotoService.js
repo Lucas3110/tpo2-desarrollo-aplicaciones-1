@@ -5,8 +5,8 @@
 // y que lo de cámara entra en una entrega posterior.
 import * as ImagePicker from 'expo-image-picker';
 import apiClient from './apiClient';
-import { TIMEOUT_SUBIDA_MS } from '../config/env';
 import { conDialogoDelSistema } from './dialogosDelSistema';
+import { TIMEOUT_FOTO_MS } from '../config/env';
 
 // Qué tan grande y con qué calidad pedimos la imagen.
 //
@@ -17,6 +17,13 @@ import { conDialogoDelSistema } from './dialogosDelSistema';
 const CALIDAD = 0.6;
 
 export const MAX_FOTOS = 8;
+
+// Sin conexión la foto no se puede subir, así que se guarda en el teléfono
+// dentro del borrador y de la cola de pendientes (AsyncStorage). Esos datos se
+// leen enteros, y en Android un valor muy grande puede fallar al leerse: por
+// eso sin conexión se admite UNA foto, y de un tamaño acotado.
+export const MAX_FOTOS_SIN_CONEXION = 1;
+const MAX_BASE64_SIN_CONEXION = 1500000; // ~1,1 MB de imagen
 
 // Devuelve las imágenes elegidas, o [] si la persona canceló.
 //
@@ -52,6 +59,15 @@ export async function elegirDeGaleria(cuantasFaltan) {
 //
 // Manda la imagen en base64 y recibe la URL relativa con la que queda
 // guardada. Esa url es la que después va en el campo fotos de la publicación.
+//
+// Punto 6: si no hay conexión (`e.esDeConexion`), devolvemos la foto como
+// `data:<mime>;base64,...` para que quede en el borrador y en la cola de
+// pendientes. Cuando vuelve internet, `offlineSyncService` la sube a
+// `/hallado/fotos` antes de enviar la publicación.
+//
+// No se guarda la dirección del archivo (`content://...`): el selector de fotos
+// de Android la entrega con un permiso temporal, y más tarde no se puede leer
+// (llega vacía y el servidor responde que no es una imagen).
 export async function subirFoto(asset) {
   if (!asset.base64) {
     // No debería pasar porque pedimos base64: true, pero si el picker lo
@@ -59,17 +75,26 @@ export async function subirFoto(asset) {
     throw new Error('No pudimos leer esa imagen, probá con otra.');
   }
 
-  // Timeout propio, mucho mas largo que el del resto: acá viajan cientos de
-  // KB y el de diez segundos se agotaba antes de terminar.
-  const { data } = await apiClient.post(
-    '/hallado/fotos',
-    {
-      base64: asset.base64,
-      mime: asset.mimeType ?? 'image/jpeg',
-    },
-    { timeout: TIMEOUT_SUBIDA_MS }
-  );
-  return data.url;
+  const mime = asset.mimeType ?? 'image/jpeg';
+
+  try {
+    const { data } = await apiClient.post(
+      '/hallado/fotos',
+      { base64: asset.base64, mime },
+      { timeout: TIMEOUT_FOTO_MS }
+    );
+    return data.url;
+  } catch (e) {
+    if (e.esDeConexion) {
+      if (asset.base64.length > MAX_BASE64_SIN_CONEXION) {
+        throw new Error(
+          'Sin conexión la foto es muy pesada para guardarla. Probá con otra o publicá cuando vuelva internet.'
+        );
+      }
+      return `data:${mime};base64,${asset.base64}`;
+    }
+    throw e;
+  }
 }
 
 // Sube varias y devuelve { urls, fallidas }.

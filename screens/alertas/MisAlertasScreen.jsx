@@ -20,15 +20,24 @@ import {
   View,
 } from 'react-native';
 import Aviso from '../../components/Aviso';
+import AvisoRequiereConexion from '../../components/AvisoRequiereConexion';
 import Boton from '../../components/Boton';
 import IndicadorNovedad from '../../components/IndicadorNovedad';
+import { useAuth } from '../../hooks/useAuth';
+import { useNetworkState } from '../../hooks/useNetworkState';
 import { cambiarEstadoAlerta, eliminarAlerta, misAlertas } from '../../services/alertaService';
+import { conCopiaLocal } from '../../services/copiaLocal';
+import { TEXTOS } from '../../utils/mensajesConexion';
 import { describirAlerta } from '../../utils/publicaciones';
 import { colors, fontSizes, radius, spacing } from '../../config/theme';
 
 export default function MisAlertasScreen({ navigation }) {
+  const { usuario } = useAuth();
+  const { conectado, motivoOffline } = useNetworkState();
   // null hasta la primera carga; [] si no tiene ninguna.
   const [alertas, setAlertas] = useState(null);
+  // true si lo que se ve es la copia guardada y no lo último del servidor.
+  const [desdeCopia, setDesdeCopia] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [error, setError] = useState(null);
@@ -41,7 +50,13 @@ export default function MisAlertasScreen({ navigation }) {
     if (!yaCargo.current && !esRefresco) setCargando(true);
     setError(null);
     try {
-      const respuesta = await misAlertas();
+      // Sin conexión se muestra la última copia que cargó bien, con un aviso.
+      const { datos: respuesta, desdeCopia: esCopia } = await conCopiaLocal(
+        'alertas',
+        usuario?.id,
+        misAlertas
+      );
+      setDesdeCopia(esCopia);
       setAlertas(respuesta.alertas);
       yaCargo.current = true;
     } catch (e) {
@@ -60,6 +75,7 @@ export default function MisAlertasScreen({ navigation }) {
   );
 
   async function alternarPausa(alerta) {
+    if (!conectado) return;
     setEnCurso(alerta.id);
     setError(null);
     try {
@@ -75,6 +91,7 @@ export default function MisAlertasScreen({ navigation }) {
   // Eliminar no se deshace, así que se confirma. Pausar no: se revierte con
   // el mismo botón.
   function confirmarEliminar(alerta) {
+    if (!conectado) return;
     Alert.alert(
       'Eliminar alerta',
       `"${describirAlerta(alerta)}" deja de avisarte. ¿La eliminamos?`,
@@ -119,6 +136,18 @@ export default function MisAlertasScreen({ navigation }) {
 
   return (
     <View style={styles.pantalla}>
+      {desdeCopia ? (
+        <View style={styles.avisoError}>
+          <Aviso tipo="info" mensaje={TEXTOS.datosDesactualizados(motivoOffline)} />
+        </View>
+      ) : null}
+
+      {!conectado ? (
+        <View style={styles.avisoError}>
+          <AvisoRequiereConexion accion="pausar o eliminar alertas" />
+        </View>
+      ) : null}
+
       {error ? (
         <View style={styles.avisoError}>
           <Aviso mensaje={error} />
@@ -155,6 +184,7 @@ export default function MisAlertasScreen({ navigation }) {
           <TarjetaAlerta
             alerta={item}
             enCurso={enCurso === item.id}
+            conectado={conectado}
             onPress={() => navigation.navigate('AlertaResultados', { id: item.id })}
             onPausar={() => alternarPausa(item)}
             onEliminar={() => confirmarEliminar(item)}
@@ -167,7 +197,7 @@ export default function MisAlertasScreen({ navigation }) {
 
 // ---------------------------------------------------------------
 
-function TarjetaAlerta({ alerta, enCurso, onPress, onPausar, onEliminar }) {
+function TarjetaAlerta({ alerta, enCurso, conectado, onPress, onPausar, onEliminar }) {
   return (
     <View
       style={[
@@ -191,10 +221,20 @@ function TarjetaAlerta({ alerta, enCurso, onPress, onPausar, onEliminar }) {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <>
-            <TouchableOpacity onPress={onPausar} hitSlop={8}>
+            <TouchableOpacity
+              onPress={onPausar}
+              disabled={!conectado}
+              style={!conectado ? styles.atenuado : null}
+              hitSlop={8}
+            >
               <Text style={styles.enlace}>{alerta.activa ? 'Pausar' : 'Reanudar'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onEliminar} hitSlop={8}>
+            <TouchableOpacity
+              onPress={onEliminar}
+              disabled={!conectado}
+              style={!conectado ? styles.atenuado : null}
+              hitSlop={8}
+            >
               <Text style={styles.enlacePeligro}>Eliminar</Text>
             </TouchableOpacity>
           </>
@@ -243,6 +283,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
   },
   // Atenuada y no escondida: sigue siendo de la persona, sólo que callada.
+  atenuado: {
+    opacity: 0.5,
+  },
   tarjetaPausada: {
     opacity: 0.6,
   },
