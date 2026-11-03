@@ -114,7 +114,7 @@ export function AuthProvider({ children }) {
   async function limpiar() {
     await borrarToken();
     await borrarUsuario();
-    // Punto 6: la caché de lectura de WatermelonDB guarda datos de quien
+    // Punto 6: la caché de lectura (AsyncStorage) guarda datos de quien
     // navegó (por ejemplo `acciones.esPublicador`). Se borra al salir para que
     // no se mezcle con la persona que entre después en el mismo teléfono.
     await limpiarCacheLectura();

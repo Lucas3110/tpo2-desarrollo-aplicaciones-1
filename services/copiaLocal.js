@@ -6,9 +6,9 @@
 // con un aviso de que puede estar desactualizada, en vez de dejar la pantalla
 // vacía con un cartel de error.
 //
-// Va en AsyncStorage (igual que los catálogos y el borrador) y no en
-// WatermelonDB: son respuestas completas del servidor que solo se leen enteras,
-// no filas que se consulten una por una.
+// Va en AsyncStorage (igual que los catálogos y el borrador) igual que
+// la caché de publicaciones de `offlineSyncService`: son respuestas completas del
+// servidor que solo se leen enteras.
 //
 // La clave lleva el id del usuario, y `borrarCopiasLocales` se llama al abrir y
 // cerrar sesión (desde `limpiarCacheLectura`): son datos personales y no tienen

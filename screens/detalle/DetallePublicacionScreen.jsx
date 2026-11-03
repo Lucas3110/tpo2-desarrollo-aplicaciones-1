@@ -6,8 +6,8 @@
 // reputación y acceso a su perfil público."
 //
 // Punto 6:
-// - Si no hay red, `obtenerPublicacion` lee de `publicaciones_cacheadas` en
-//   WatermelonDB y devuelve `desdeCache: true`.
+// - Si no hay red, `obtenerPublicacion` lee de la caché local de
+//   publicaciones y devuelve `desdeCache: true`.
 // - Si un refresco falla por falta de red y ya había datos en pantalla, no
 //   se borra nada y se advierte con `<Aviso tipo="info" />`.
 // - Usa `useNetworkState()` para deshabilitar las acciones online (reclamar,

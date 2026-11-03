@@ -1,5 +1,5 @@
 // Punto 5 y Punto 6: todo lo que la app le pide al backend sobre
-// publicaciones, con respaldo local en WatermelonDB cuando no hay conexión.
+// publicaciones, con respaldo local (AsyncStorage) cuando no hay conexión.
 //
 // JavaScript puro, sin JSX. Todas las peticiones salen por apiClient, que es
 // el único cliente con interceptores.
@@ -79,7 +79,7 @@ export async function obtenerBarrios() {
 // pérdida que las traiga.
 //
 // Punto 6: si falla por falta de red (`e.esDeConexion`), guarda la
-// publicación en la tabla `publicaciones_pendientes` de WatermelonDB para
+// publicación en la cola de pendientes (AsyncStorage) para
 // que `NetworkContext` la envíe sola apenas vuelva internet.
 export async function crearPublicacion(datos, opcionesOffline = {}) {
   try {
@@ -123,7 +123,7 @@ export function urlDeFoto(url) {
 // backend según quién pide: la app las muestra, no las calcula. Y la
 // dirección exacta viene en null si no corresponde verla.
 //
-// Punto 6: al consultar con conexión se guarda en `publicaciones_cacheadas`.
+// Punto 6: al consultar con conexión se guarda en la caché local.
 // Si falla por falta de red (`e.esDeConexion`), se devuelve la copia local
 // con `desdeCache: true`.
 export async function obtenerPublicacion(id) {
@@ -173,7 +173,7 @@ export async function misSeguidas() {
 // no lo filtrado: es lo que necesitan las solapas, porque si contara lo
 // filtrado, parado en "Vencidas" diria "Abiertas: 0".
 //
-// Punto 6: antepone las publicaciones de `publicaciones_pendientes` que
+// Punto 6: antepone las publicaciones de la cola de pendientes que
 // están esperando conexión para enviarse.
 export async function misPublicaciones(estado, usuarioId = null) {
   const incluirPendientes = !estado || estado === 'ABIERTA';
@@ -227,7 +227,7 @@ export async function eliminarPublicacion(id) {
 // encontraron"). Se llama asi justamente para que no se pueda confundir.
 //
 // Devuelve { publicaciones, paginado, desdeCache }.
-// Punto 6: guarda la primera página exitosa en `publicaciones_cacheadas`. Si
+// Punto 6: guarda la primera página exitosa en la caché local. Si
 // no hay conexión (`e.esDeConexion`), devuelve los últimos resultados
 // guardados con `desdeCache: true`.
 export async function buscarPublicaciones(criterios) {

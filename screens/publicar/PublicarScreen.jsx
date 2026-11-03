@@ -14,7 +14,7 @@
 // Punto 6:
 // - Se apoya en `borradorService.js` mientras se completan los pasos.
 // - Si al tocar "Publicar" no hay red, `crearPublicacion` guarda la
-//   publicación en la tabla `publicaciones_pendientes` de WatermelonDB,
+//   publicación en la cola de pendientes (AsyncStorage),
 //   limpia el borrador y `NetworkContext` la envía automáticamente a
 //   `POST /hallado/publicaciones` al recuperar la conexión.
 import { useCallback, useEffect, useRef, useState } from 'react';

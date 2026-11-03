@@ -1,23 +1,34 @@
-// Punto 6: capa de persistencia offline sobre WatermelonDB.
+// Punto 6: capa de persistencia offline sobre AsyncStorage.
 //
 // Centraliza dos responsabilidades:
-//   1. Caché de lectura (`publicaciones_cacheadas`): guarda las últimas
-//      publicaciones consultadas y los últimos resultados de búsqueda para
-//      responder cuando `apiClient` lanza `ErrorApi` con `.esDeConexion`.
-//   2. Cola de escritura (`publicaciones_pendientes`): guarda las
-//      publicaciones creadas sin internet (apoyándose en el borrador local)
-//      y las envía automáticamente a `POST /hallado/publicaciones` apenas
-//      vuelve la red.
-import { Q } from '@nozbe/watermelondb';
-import { database, tablaCacheadas, tablaPendientes } from '../database';
+//   1. Caché de lectura: guarda las últimas publicaciones consultadas y los
+//      últimos resultados de búsqueda para responder cuando `apiClient` lanza
+//      `ErrorApi` con `.esDeConexion`.
+//   2. Cola de escritura: guarda las publicaciones creadas sin internet y las
+//      envía automáticamente a `POST /hallado/publicaciones` apenas vuelve la
+//      red.
+//
+// Va en AsyncStorage, igual que borradorService, historialBusquedasService y
+// preferencias: funciona en Expo Go y lo que se guarda ya es JSON. Cada clave
+// tiene adentro un array serializado con JSON.stringify.
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
 import { TIMEOUT_FOTO_MS } from '../config/env';
 import { hoyIso, isoATexto, isoDeHace } from '../utils/fechas';
 import { borrarBorrador, guardarBorrador } from './borradorService';
 import { borrarCopiasLocales } from './copiaLocal';
 
-// Tope de publicaciones guardadas en el teléfono para no inflar la base
-// indefinidamente. Se conservan siempre las más recientes.
+const CLAVE_CACHE = 'hallado.offline.cacheadas';
+const PREFIJO_PENDIENTES = 'hallado.offline.pendientes.';
+
+function clavePendientes(usuarioId) {
+  return `${PREFIJO_PENDIENTES}${usuarioId}`;
+}
+
+// Cuántas publicaciones consultadas se conservan. El enunciado pide "las
+// últimas publicaciones que la persona consultó", sin decir cuántas.
+// Cincuenta alcanza de sobra y mantiene el array lo bastante chico como para
+// leerlo y escribirlo entero sin que se note.
 const MAX_CACHEADAS = 50;
 
 const UN_DIA_MS = 24 * 60 * 60 * 1000;
@@ -28,47 +39,56 @@ const DIAS_VIGENCIA = 30;
 
 // Estado de la cola que NO se reintenta: el backend rechazó la publicación
 // con un error definitivo (400/422...). Queda guardada para que la persona
-// vea el motivo y la descarte, pero la sincronización la ignora.
+// vea el motivo y la edite o la descarte, pero la sincronización la ignora.
 const ESTADO_ERROR = 'ERROR';
 
-function asignarCamposCache(registro, publicacion, acciones, esUltimoResultado) {
-  let previo = {};
-  if (registro.datosJson) {
-    try {
-      previo = JSON.parse(registro.datosJson) ?? {};
-    } catch {
-      previo = {};
-    }
-  }
+// ---------------------------------------------------------------
+// Lectura y escritura del storage
+// ---------------------------------------------------------------
 
-  // Si ya teníamos el detalle completo guardado y ahora entra el resumen
-  // desde un listado de búsqueda, fusionamos para no perder `descripcion`,
-  // `publicador` o `preguntaVerificacion`.
-  const combinado = { ...previo, ...publicacion };
-
-  registro.publicacionId = Number(combinado.id);
-  registro.tipo = String(combinado.tipo ?? 'PERDI');
-  registro.titulo = String(combinado.titulo ?? '');
-  registro.descripcion = combinado.descripcion ?? previo.descripcion ?? null;
-  registro.estado = String(combinado.estado ?? 'ABIERTA');
-  registro.fechaSuceso = String(combinado.fechaSuceso ?? '');
-  registro.franjaHoraria = String(combinado.franjaHoraria ?? 'NO_SE');
-  registro.barrioNombre = String(combinado.barrio?.nombre ?? '');
-  registro.categoriaNombre = String(combinado.categoria?.nombre ?? '');
-  registro.fotosJson = JSON.stringify(combinado.fotos ?? []);
-  registro.datosJson = JSON.stringify(combinado);
-  if (acciones) {
-    registro.accionesJson = JSON.stringify(acciones);
-  }
-  if (esUltimoResultado !== undefined) {
-    registro.esUltimoResultado = Boolean(esUltimoResultado);
-  }
-  registro.consultadoEn = Date.now();
+// Cada cambio lee el array entero, lo modifica y lo vuelve a escribir. Si dos
+// cambios se pisan (por ejemplo la sincronización actualizando una pendiente
+// mientras la persona crea otra), el segundo borraría lo del primero. El
+// candado los pone en fila: cada uno espera a que termine el anterior.
+let fila = Promise.resolve();
+function conCandado(tarea) {
+  const resultado = fila.then(tarea, tarea);
+  fila = resultado.catch(() => {});
+  return resultado;
 }
 
-// Inserta o actualiza muchas publicaciones con UNA sola consulta de lectura y
-// UN solo batch de escritura (antes: un SELECT por publicación y una
-// transacción por cada una), y recorta la caché una única vez al final.
+async function leerLista(clave) {
+  try {
+    const crudo = await AsyncStorage.getItem(clave);
+    const lista = crudo ? JSON.parse(crudo) : [];
+    return Array.isArray(lista) ? lista : [];
+  } catch {
+    // Storage que falla o JSON roto: se arranca vacío. Peor sería tirar la
+    // pantalla abajo por una copia local.
+    return [];
+  }
+}
+
+// Lee, modifica y guarda una lista dentro del candado. `cambiar` recibe la
+// lista y devuelve la nueva.
+function modificarLista(clave, cambiar) {
+  return conCandado(async () => {
+    const nueva = cambiar(await leerLista(clave));
+    await AsyncStorage.setItem(clave, JSON.stringify(nueva));
+    return nueva;
+  });
+}
+
+// ---------------------------------------------------------------
+// Caché de lectura
+// ---------------------------------------------------------------
+//
+// Cada elemento: { publicacionId, datos, acciones, esUltimoResultado,
+// consultadoEn }. `datos` es el DTO de la publicación tal cual (con fotos,
+// barrio y categoría).
+
+// Inserta o actualiza muchas publicaciones en una sola escritura y recorta la
+// caché al final.
 async function upsertPublicaciones(
   publicaciones,
   { acciones = null, esUltimoResultado, desmarcarAnteriores = false } = {}
@@ -79,52 +99,39 @@ async function upsertPublicaciones(
   }
   if (porId.size === 0 && !desmarcarAnteriores) return;
 
-  const ids = [...porId.keys()];
+  const ahora = Date.now();
 
-  await database.write(async () => {
-    const existentes =
-      ids.length > 0
-        ? await tablaCacheadas.query(Q.where('publicacion_id', Q.oneOf(ids))).fetch()
-        : [];
-    const registroPorId = new Map(existentes.map((r) => [r.publicacionId, r]));
-    const operaciones = [];
+  await modificarLista(CLAVE_CACHE, (lista) => {
+    const existentes = new Map(lista.map((item) => [item.publicacionId, item]));
 
     if (desmarcarAnteriores) {
-      const anteriores = await tablaCacheadas
-        .query(Q.where('es_ultimo_resultado', true))
-        .fetch();
-      for (const ant of anteriores) {
-        // Los que vuelven a entrar en este listado se actualizan abajo.
-        if (registroPorId.has(ant.publicacionId)) continue;
-        operaciones.push(
-          ant.prepareUpdate((reg) => {
-            reg.esUltimoResultado = false;
-          })
-        );
+      for (const [id, item] of existentes) {
+        existentes.set(id, { ...item, esUltimoResultado: false });
       }
     }
 
     for (const [id, pub] of porId) {
-      const registro = registroPorId.get(id);
-      if (registro) {
-        operaciones.push(
-          registro.prepareUpdate((reg) => {
-            asignarCamposCache(reg, pub, acciones, esUltimoResultado);
-          })
-        );
-      } else {
-        operaciones.push(
-          tablaCacheadas.prepareCreate((reg) => {
-            asignarCamposCache(reg, pub, acciones, esUltimoResultado ?? false);
-          })
-        );
-      }
+      const previo = existentes.get(id);
+      // Si ya teníamos el detalle completo guardado y ahora entra el resumen
+      // desde un listado de búsqueda, se fusiona para no perder `descripcion`,
+      // `publicador` o `preguntaVerificacion`.
+      existentes.set(id, {
+        publicacionId: id,
+        datos: { ...(previo?.datos ?? {}), ...pub },
+        acciones: acciones ?? previo?.acciones ?? null,
+        esUltimoResultado:
+          esUltimoResultado !== undefined
+            ? Boolean(esUltimoResultado)
+            : Boolean(previo?.esUltimoResultado),
+        consultadoEn: ahora,
+      });
     }
 
-    if (operaciones.length > 0) await database.batch(...operaciones);
+    // Se conservan siempre las más recientes.
+    return [...existentes.values()]
+      .sort((a, b) => b.consultadoEn - a.consultadoEn)
+      .slice(0, MAX_CACHEADAS);
   });
-
-  await recortarCacheAntigua();
 }
 
 // Guarda o actualiza una publicación individual (por ejemplo al abrir
@@ -156,7 +163,7 @@ export async function guardarPublicacionesEnCache(publicaciones = []) {
   }
 }
 
-// Reemplaza la marca `es_ultimo_resultado` con las publicaciones del último
+// Reemplaza la marca `esUltimoResultado` con las publicaciones del último
 // listado buscado exitosamente en el punto 3.
 export async function guardarResultadosBusquedaEnCache(publicaciones = []) {
   try {
@@ -171,39 +178,16 @@ export async function guardarResultadosBusquedaEnCache(publicaciones = []) {
   }
 }
 
-async function recortarCacheAntigua() {
-  try {
-    // Solo traemos lo que sobra (desde la posición MAX_CACHEADAS en adelante),
-    // no la tabla entera.
-    const sobrantes = await tablaCacheadas
-      .query(Q.sortBy('consultado_en', Q.desc), Q.skip(MAX_CACHEADAS), Q.take(1000))
-      .fetch();
-
-    if (sobrantes.length === 0) return;
-
-    await database.write(async () => {
-      await database.batch(...sobrantes.map((item) => item.prepareDestroyPermanently()));
-    });
-  } catch {
-    // Si falla la limpieza no afecta la experiencia de la persona.
-  }
-}
-
-// Borra toda la caché de lectura. Se llama al cerrar sesión: la caché guarda
-// datos propios de quien navegó (`acciones`: si es el publicador, si puede
-// reclamar...) y no tiene que verlos la próxima persona que use el teléfono.
-// La cola de pendientes NO se toca: ya está separada por `usuario_id` y es
-// trabajo de la persona que todavía no se envió.
+// Borra toda la caché de lectura. Se llama al abrir y cerrar sesión: la caché
+// guarda datos propios de quien navegó (`acciones`: si es el publicador, si
+// puede reclamar...) y no tiene que verlos la próxima persona que use el
+// teléfono. La cola de pendientes NO se toca: ya está separada por usuario y
+// es trabajo de la persona que todavía no se envió.
 export async function limpiarCacheLectura() {
-  // También las copias de Mis reclamos / Mis alertas / Seguidas (AsyncStorage).
+  // También las copias de Mis reclamos / Mis alertas / Seguidas.
   await borrarCopiasLocales();
   try {
-    await database.write(async () => {
-      const todas = await tablaCacheadas.query().fetch();
-      if (todas.length > 0) {
-        await database.batch(...todas.map((item) => item.prepareDestroyPermanently()));
-      }
-    });
+    await conCandado(() => AsyncStorage.removeItem(CLAVE_CACHE));
   } catch (error) {
     if (__DEV__) {
       console.warn('[Offline] No se pudo limpiar la caché de lectura:', error);
@@ -222,28 +206,25 @@ function accionesPorDefecto(publicacion) {
   };
 }
 
-// Lee una publicación por su ID del backend desde WatermelonDB.
+// Lee una publicación por su ID del backend.
 export async function leerPublicacionDeCache(id) {
   try {
     const numId = Number(id);
     if (!Number.isFinite(numId)) return null;
 
-    const encontrados = await tablaCacheadas
-      .query(Q.where('publicacion_id', numId))
-      .fetch();
+    const lista = await leerLista(CLAVE_CACHE);
+    const registro = lista.find((item) => item.publicacionId === numId);
+    if (!registro) return null;
 
-    if (encontrados.length === 0) return null;
+    const publicacion = registro.datos ?? {};
 
-    const registro = encontrados[0];
-    const publicacion = registro.aDtoPublicacion();
-
-    // Aseguramos estructura mínima para que DetallePublicacionScreen nunca
-    // falle aunque la publicación haya entrado originalmente desde el listado.
+    // Estructura mínima para que DetallePublicacionScreen nunca falle aunque
+    // la publicación haya entrado originalmente desde el listado.
     const normalizada = {
       ...publicacion,
-      fotos: Array.isArray(publicacion.fotos) ? publicacion.fotos : registro.fotos,
-      barrio: publicacion.barrio ?? { nombre: registro.barrioNombre },
-      categoria: publicacion.categoria ?? { nombre: registro.categoriaNombre },
+      fotos: Array.isArray(publicacion.fotos) ? publicacion.fotos : [],
+      barrio: publicacion.barrio ?? { nombre: '' },
+      categoria: publicacion.categoria ?? { nombre: '' },
       publicador: publicacion.publicador ?? {
         id: 0,
         nombre: 'Vecino de Hallado',
@@ -314,12 +295,10 @@ function cumpleCriterios(pub, criterios) {
 // última búsqueda online y mostraba resultados que no coincidían con el filtro.
 export async function leerUltimosResultadosDeCache(criterios = {}) {
   try {
-    const registros = await tablaCacheadas
-      .query(Q.sortBy('consultado_en', Q.desc))
-      .fetch();
+    const registros = await leerLista(CLAVE_CACHE);
 
     const publicaciones = registros
-      .map((r) => r.aDtoPublicacion())
+      .map((r) => r.datos ?? {})
       .filter((pub) => cumpleCriterios(pub, criterios))
       // Más reciente primero, como RECIENTES. CERCANOS no se puede sin red.
       .sort((a, b) => String(b.fechaSuceso ?? '').localeCompare(String(a.fechaSuceso ?? '')));
@@ -347,8 +326,41 @@ export async function leerUltimosResultadosDeCache(criterios = {}) {
 }
 
 // ---------------------------------------------------------------
-// Cola de escritura: `publicaciones_pendientes`
+// Cola de escritura: publicaciones pendientes
 // ---------------------------------------------------------------
+//
+// Una lista por usuario. Cada elemento: { id, usuarioId, tipo, titulo,
+// barrioNombre, categoriaNombre, payload, estadoEnvio, ultimoError, creadoEn }.
+//
+// El id lleva adelante el id del usuario ("15_1793..._x7k2"): así descartar o
+// editar una pendiente sabe en qué lista buscarla sin recibir el usuario.
+
+function nuevoIdPendiente(usuarioId) {
+  return `${usuarioId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function usuarioDeIdPendiente(pendienteId) {
+  return String(pendienteId).split('_')[0];
+}
+
+async function buscarPendiente(pendienteId) {
+  const lista = await leerLista(clavePendientes(usuarioDeIdPendiente(pendienteId)));
+  return lista.find((item) => item.id === pendienteId) ?? null;
+}
+
+// Cambia una pendiente dentro de su lista. Si ya no existe (la persona la
+// descartó mientras se enviaba) no hace nada: no la vuelve a crear.
+async function actualizarPendiente(item, cambios) {
+  await modificarLista(clavePendientes(item.usuarioId), (lista) =>
+    lista.map((p) => (p.id === item.id ? { ...p, ...cambios } : p))
+  );
+}
+
+async function eliminarPendiente(item) {
+  await modificarLista(clavePendientes(item.usuarioId), (lista) =>
+    lista.filter((p) => p.id !== item.id)
+  );
+}
 
 // `posibleEnvio`: el pedido llegó a salir y se cortó antes de la respuesta
 // (el servidor pudo haber creado la publicación). Se anota en el payload con
@@ -359,26 +371,26 @@ export async function encolarPublicacionPendiente(
   datos,
   { barrioNombre = null, categoriaNombre = null, posibleEnvio = false } = {}
 ) {
-  let creado = null;
-
+  const usuario = Number(usuarioId ?? 0);
   const payload = posibleEnvio ? { ...datos, _intentoPostEn: Date.now() } : datos;
 
-  await database.write(async () => {
-    creado = await tablaPendientes.create((reg) => {
-      reg.usuarioId = Number(usuarioId ?? 0);
-      reg.tipo = String(datos.tipo);
-      reg.titulo = String(datos.titulo ?? '').trim();
-      reg.barrioNombre = barrioNombre ?? 'Barrio seleccionado';
-      reg.categoriaNombre = categoriaNombre ?? 'Categoría';
-      reg.payloadJson = JSON.stringify(payload);
-      reg.estadoEnvio = 'PENDIENTE';
-      reg.ultimoError = null;
-      reg.creadoEn = Date.now();
-    });
-  });
+  const creado = {
+    id: nuevoIdPendiente(usuario),
+    usuarioId: usuario,
+    tipo: String(datos.tipo),
+    titulo: String(datos.titulo ?? '').trim(),
+    barrioNombre: barrioNombre ?? 'Barrio seleccionado',
+    categoriaNombre: categoriaNombre ?? 'Categoría',
+    payload,
+    estadoEnvio: 'PENDIENTE',
+    ultimoError: null,
+    creadoEn: Date.now(),
+  };
 
-  // Una vez encolada en WatermelonDB ya no es un borrador a medio cargar,
-  // así que limpiamos borradorService para que no vuelva a ofrecer retomarlo.
+  await modificarLista(clavePendientes(usuario), (lista) => [...lista, creado]);
+
+  // Una vez encolada ya no es un borrador a medio cargar, así que limpiamos
+  // borradorService para que no vuelva a ofrecer retomarlo.
   if (usuarioId) {
     await borrarBorrador(usuarioId);
   }
@@ -393,7 +405,7 @@ export function aDtoPendiente(registro) {
 
   return {
     id: `pendiente-${registro.id}`,
-    // Id real de la fila en WatermelonDB, para poder descartarla.
+    // Id real en la cola, para poder descartarla o editarla.
     pendienteId: registro.id,
     esPendiente: true,
     pendienteDeEnvio: true,
@@ -426,44 +438,27 @@ export function aDtoPendiente(registro) {
 // reintentando cada 8 segundos para siempre.
 export async function contarPublicacionesPendientes(usuarioId) {
   if (!usuarioId) return 0;
-  try {
-    return await tablaPendientes
-      .query(
-        Q.where('usuario_id', Number(usuarioId)),
-        Q.where('estado_envio', Q.notEq(ESTADO_ERROR))
-      )
-      .fetchCount();
-  } catch {
-    return 0;
-  }
+  const lista = await leerLista(clavePendientes(Number(usuarioId)));
+  return lista.filter((p) => p.estadoEnvio !== ESTADO_ERROR).length;
 }
 
-// Lista todas (incluidas las rechazadas, para poder mostrar el motivo).
+// Lista todas (incluidas las rechazadas, para poder mostrar el motivo), las
+// más nuevas primero.
 export async function listarPublicacionesPendientes(usuarioId) {
   if (!usuarioId) return [];
-  try {
-    const pendientes = await tablaPendientes
-      .query(
-        Q.where('usuario_id', Number(usuarioId)),
-        Q.sortBy('creado_en', Q.desc)
-      )
-      .fetch();
-    return pendientes.map(aDtoPendiente);
-  } catch {
-    return [];
-  }
+  const lista = await leerLista(clavePendientes(Number(usuarioId)));
+  return [...lista].sort((a, b) => b.creadoEn - a.creadoEn).map(aDtoPendiente);
 }
 
 // Elimina una publicación de la cola (la persona la descarta, típicamente
 // una que el backend rechazó).
 export async function descartarPublicacionPendiente(pendienteId) {
   try {
-    const registro = await tablaPendientes.find(pendienteId);
-    await database.write(async () => {
-      await registro.destroyPermanently();
-    });
+    await modificarLista(clavePendientes(usuarioDeIdPendiente(pendienteId)), (lista) =>
+      lista.filter((p) => p.id !== pendienteId)
+    );
   } catch {
-    // Si ya no existe, el resultado es el mismo que queríamos.
+    // Si no se pudo, la pendiente sigue en la lista y se puede reintentar.
   }
 }
 
@@ -486,12 +481,8 @@ function pasoDelError(mensaje, tipo) {
 //
 // Devuelve true si pudo convertirla; false si ya no existía.
 export async function convertirPendienteEnBorrador(pendienteId, usuarioId) {
-  let registro;
-  try {
-    registro = await tablaPendientes.find(pendienteId);
-  } catch {
-    return false;
-  }
+  const registro = await buscarPendiente(pendienteId);
+  if (!registro) return false;
 
   const p = registro.payload ?? {};
   const tipo = p.tipo ?? registro.tipo;
@@ -600,16 +591,6 @@ async function subirFotoLocal(referencia) {
   return data.url;
 }
 
-async function actualizarPendiente(item, cambios) {
-  await database.write(async () => {
-    await item.update((reg) => {
-      if (cambios.estadoEnvio !== undefined) reg.estadoEnvio = cambios.estadoEnvio;
-      if (cambios.ultimoError !== undefined) reg.ultimoError = cambios.ultimoError;
-      if (cambios.payload !== undefined) reg.payloadJson = JSON.stringify(cambios.payload);
-    });
-  });
-}
-
 // Sube las fotos locales y reemplaza cada una por su URL del backend. Cada
 // subida se persiste en el payload: si el POST posterior falla y se reintenta,
 // no se vuelven a subir (ni quedan archivos huérfanos en el servidor).
@@ -656,12 +637,6 @@ async function yaExisteEnServidor(payload) {
   });
 }
 
-async function eliminarPendiente(item) {
-  await database.write(async () => {
-    await item.destroyPermanently();
-  });
-}
-
 // Procesa en orden todas las publicaciones pendientes del usuario activo.
 // La invoca NetworkContext automáticamente cuando vuelve la conexión.
 //
@@ -681,16 +656,12 @@ export async function sincronizarPublicacionesPendientes(usuarioId) {
   try {
     // Todo menos las rechazadas. Esto incluye filas que quedaron en 'ENVIANDO'
     // si la app se cerró en medio de un envío.
-    const pendientes = await tablaPendientes
-      .query(
-        Q.where('usuario_id', Number(usuarioId)),
-        Q.where('estado_envio', Q.notEq(ESTADO_ERROR)),
-        Q.sortBy('creado_en', Q.asc)
-      )
-      .fetch();
+    const pendientes = (await leerLista(clavePendientes(Number(usuarioId))))
+      .filter((p) => p.estadoEnvio !== ESTADO_ERROR)
+      .sort((a, b) => a.creadoEn - b.creadoEn);
 
     for (const item of pendientes) {
-      let payload = item.payload;
+      let { payload } = item;
       if (!payload) {
         await eliminarPendiente(item);
         continue;
