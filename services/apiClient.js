@@ -137,12 +137,37 @@ export class ErrorApi extends Error {
 
   // Las pantallas preguntan esto para decidir si muestran el cartel de
   // "sin conexion" en vez del mensaje de error.
+  // Las pantallas que deshabilitan acciones "hasta que vuelva la red" miran
+  // esto. Un tiempo agotado cuenta igual: en los dos casos no se pudo, y lo
+  // que corresponde es dejar lo que ya estaba en pantalla y poder reintentar.
   get esDeConexion() {
-    return this.codigo === 'SIN_CONEXION';
+    return this.codigo === 'SIN_CONEXION' || this.codigo === 'TIEMPO_AGOTADO';
   }
 }
 
 function normalizarError(error) {
+  // Que se haya acabado el tiempo NO es lo mismo que no tener conexión, y
+  // confundirlos manda a buscar el problema al lugar equivocado: con el
+  // backend perfectamente arriba, subir una foto decía "Sin conexión".
+  //
+  // axios no deja response en ninguno de los dos casos, así que hay que
+  // mirar el código: ECONNABORTED es el suyo para "se acabó el tiempo".
+  if (error.code === 'ECONNABORTED') {
+    if (__DEV__) {
+      console.warn(`[API] se acabó el tiempo esperando a ${BASE_URL} -> ${error.message}`);
+    }
+    return new ErrorApi(
+      'Tardó demasiado. Probá de nuevo, y si sigue igual fijate la conexión.',
+      'TIEMPO_AGOTADO',
+      0,
+      // pudoLlegar: el pedido salió y el servidor pudo haberlo recibido. La
+      // cola offline lo usa para verificar antes de reenviar y no duplicar.
+      true,
+      // Con causa ya puesta, el interceptor no pisa el "Tardó demasiado".
+      CAUSA_SERVIDOR
+    );
+  }
+
   // Sin respuesta = no llegamos al servidor (sin red, IP mal, backend apagado).
   if (!error.response) {
     if (__DEV__) {

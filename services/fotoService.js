@@ -77,7 +77,7 @@ export async function subirFoto(asset) {
     if (e.esDeConexion && asset.uri) {
       // Guardamos solo la URI local de la foto (unas decenas de bytes), no el
       // base64 completo: varias fotos de varios MB dentro del borrador
-      // (AsyncStorage) o de `payload_json` (SQLite) rompen los límites de
+      // (AsyncStorage) o de la cola de pendientes rompen los límites de
       // Android. `offlineSyncService` lee el archivo recién al sincronizar.
       return asset.uri;
     }

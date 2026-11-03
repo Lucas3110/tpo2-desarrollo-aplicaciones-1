@@ -114,6 +114,11 @@ export default function PublicarScreen({ navigation, route }) {
   const [errores, setErrores] = useState({});
   const [errorPedido, setErrorPedido] = useState(null);
   const [publicando, setPublicando] = useState(false);
+
+  // Hay una subida de fotos en curso. Mientras sea true no se avanza de
+  // paso: si se avanzara, las fotos que no terminaron no entran en la
+  // publicacion y la persona cree que las subio.
+  const [subiendoFotos, setSubiendoFotos] = useState(false);
   const [publicada, setPublicada] = useState(null);
 
   // Borrador
@@ -561,7 +566,7 @@ export default function PublicarScreen({ navigation, route }) {
                 ? 'Si tenés una foto de lo que perdiste, ayuda un montón a que alguien lo reconozca.'
                 : 'Mostrá lo que encontraste, pero sin el detalle que vas a preguntar después para verificar.'}
             </Text>
-            <SelectorFotos urls={fotos} onCambiar={setFotos} />
+            <SelectorFotos urls={fotos} onCambiar={setFotos} onOcupado={setSubiendoFotos} />
             <Text style={styles.explicacion}>Podés seguir sin fotos y agregarlas después.</Text>
           </>
         ) : null}
@@ -720,10 +725,15 @@ export default function PublicarScreen({ navigation, route }) {
             titulo={esUltimo ? (conectado ? 'Publicar' : 'Guardar para enviar') : 'Continuar'}
             onPress={avanzar}
             cargando={publicando}
+            deshabilitado={subiendoFotos}
           />
 
           {paso > 0 ? (
-            <TouchableOpacity style={styles.volver} onPress={retroceder} disabled={publicando}>
+            <TouchableOpacity
+              style={styles.volver}
+              onPress={retroceder}
+              disabled={publicando || subiendoFotos}
+            >
               <Text style={styles.enlace}>Volver</Text>
             </TouchableOpacity>
           ) : null}
