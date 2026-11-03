@@ -16,7 +16,13 @@ import {
   View,
 } from 'react-native';
 import Aviso from './Aviso';
-import { elegirDeGaleria, MAX_FOTOS, subirFotos } from '../services/fotoService';
+import { useNetworkState } from '../hooks/useNetworkState';
+import {
+  elegirDeGaleria,
+  MAX_FOTOS,
+  MAX_FOTOS_SIN_CONEXION,
+  subirFotos,
+} from '../services/fotoService';
 import { urlDeFoto } from '../services/publicacionService';
 import { colors, fontSizes, radius, spacing } from '../config/theme';
 
@@ -30,10 +36,21 @@ export default function SelectorFotos({ urls, onCambiar, onOcupado }) {
   const [progreso, setProgreso] = useState(null);
   const [error, setError] = useState(null);
 
-  const faltan = MAX_FOTOS - urls.length;
+  const { conectado } = useNetworkState();
+
+  // Sin conexión las fotos quedan guardadas en el teléfono (`data:`), y se
+  // admiten pocas: ver MAX_FOTOS_SIN_CONEXION en fotoService.
+  const locales = urls.filter((u) => String(u).startsWith('data:')).length;
+  const faltan = conectado
+    ? MAX_FOTOS - urls.length
+    : Math.min(MAX_FOTOS - urls.length, MAX_FOTOS_SIN_CONEXION - locales);
 
   const agregar = async () => {
     setError(null);
+    if (faltan <= 0) {
+      setError('Sin conexión podés guardar una sola foto. Las demás se agregan cuando vuelva internet.');
+      return;
+    }
     try {
       const elegidas = await elegirDeGaleria(faltan);
       if (elegidas.length === 0) return;

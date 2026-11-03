@@ -615,6 +615,21 @@ async function resolverFotosPendientes(item, payload) {
   return actual;
 }
 
+// Sube las fotos que todavía son locales (file://, content://) y devuelve la
+// lista con las URLs del backend. Sirve para publicar CON conexión una
+// publicación cuyas fotos se eligieron cuando no había: si no, el servidor
+// rechaza la URI local. Si una foto no se puede subir, tira el error: nunca se
+// descarta en silencio para publicar igual sin ella.
+export async function subirFotosLocales(fotos) {
+  const lista = Array.isArray(fotos) ? [...fotos] : [];
+  for (let i = 0; i < lista.length; i += 1) {
+    if (typeof lista[i] === 'string' && ES_FOTO_LOCAL.test(lista[i])) {
+      lista[i] = await subirFotoLocal(lista[i]);
+    }
+  }
+  return lista;
+}
+
 // ¿Ya existe en el servidor una publicación mía que coincide con esta? Solo
 // se consulta si un intento anterior pudo haber llegado al servidor sin que
 // nos enterásemos (respuesta perdida). El DTO no trae fecha de creación, así
